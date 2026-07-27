@@ -9,7 +9,7 @@ namespace ChatApp.Application.Features.Messages.Send;
 public sealed class Handler(
     IAppDbContext db,
     ICurrentUser currentUser,
-    ISummaryService summaryService,
+    ITokenCounter tokenCounter,
     IMemoryQueue memoryQueue,
     IChatNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
 {
@@ -36,7 +36,7 @@ public sealed class Handler(
         };
         db.Add(message);
 
-        await summaryService.AddPendingTokensAsync(conversation.Id, request.Content, cancellationToken);
+        await tokenCounter.AddPendingTokensAsync(conversation.Id, request.Content, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
         await memoryQueue.EnqueueAsync(conversation.Id, cancellationToken);

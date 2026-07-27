@@ -12,7 +12,7 @@ public sealed class Handler(
     ICurrentUser currentUser,
     IStorageClient storageClient,
     IVisionService visionService,
-    ISummaryService summaryService,
+    ITokenCounter tokenCounter,
     IMemoryQueue memoryQueue,
     IChatNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
 {
@@ -47,7 +47,7 @@ public sealed class Handler(
         };
         db.Add(message);
 
-        await summaryService.AddPendingTokensAsync(conversation.Id, caption ?? string.Empty, cancellationToken);
+        await tokenCounter.AddPendingTokensAsync(conversation.Id, caption ?? string.Empty, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
         await memoryQueue.EnqueueAsync(conversation.Id, cancellationToken);
