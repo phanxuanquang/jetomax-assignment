@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Abstractions\" />
+    <Folder Include="Features\Conversations\" />
+    <Folder Include="Features\Messages\" />
+    <Folder Include="Features\Internal\" />
+    <Folder Include="Features\Summaries\" />
+    <Folder Include="Features\Ocr\" />
+    <Folder Include="Common\Memory\" />
+    <Folder Include="Common\Behaviors\" />
+    <Folder Include="Results\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ChatApp.Domain\ChatApp.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ChatApp.Api/ChatApp.Api.csproj" Id="eb10e02a-0e62-42cc-b86d-79904ec25b5a" />
+    <Project Path="src/ChatApp.Application/ChatApp.Application.csproj" Id="ac0de9fb-3259-42f6-94d7-6d666e69f533" />
+    <Project Path="src/ChatApp.Domain/ChatApp.Domain.csproj" Id="8a6f4134-64a2-4eda-afc9-9737c9df7399" />
+    <Project Path="src/ChatApp.Infrastructure/ChatApp.Infrastructure.csproj" Id="d0ca1b02-cacd-4e2e-914d-ad5cf2e8a8b8" />
+  </Folder>
+  <Folder Name="/tests/" />
+</Solution>
