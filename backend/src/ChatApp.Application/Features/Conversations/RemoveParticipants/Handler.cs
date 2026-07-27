@@ -1,6 +1,7 @@
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
 using MediatR;
+using System.Collections.Frozen;
 
 namespace ChatApp.Application.Features.Conversations.RemoveParticipants;
 
@@ -16,16 +17,16 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var guard = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
-        if (!guard.IsSuccess)
+        var getOwnedConversationResult = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
+        if (!getOwnedConversationResult.IsSuccess)
         {
-            return Result.Failure(guard.Error!);
+            return Result.Failure(getOwnedConversationResult.Error!);
         }
 
-        var conversation = guard.Value!;
-        var targetIds = request.UserIds.Distinct().ToList();
+        var conversation = getOwnedConversationResult.Value!;
+        var toBeRemovedUserIds = request.UserIds.ToFrozenSet();
 
-        if (targetIds.Contains(conversation.OwnerId!.Value))
+        if (toBeRemovedUserIds.Contains(conversation.OwnerId!.Value))
         {
             return Result.Failure(Error.Conflict("conversation.remove.owner", "The owner cannot be removed this way; transfer ownership or leave instead."));
         }
@@ -34,26 +35,22 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
             db.Participants.Where(p => p.ConversationId == conversation.Id),
             cancellationToken);
 
-        var toRemove = participants.Where(p => targetIds.Contains(p.UserId)).ToList();
-        if (toRemove.Count != targetIds.Count)
+        var toBeRemovedParticipants = participants.Where(p => toBeRemovedUserIds.Contains(p.UserId)).ToList();
+        if (toBeRemovedParticipants.Count != toBeRemovedUserIds.Count)
         {
             return Result.Failure(Error.NotFound("conversation.remove.not_participant", "One or more users are not participants of this conversation."));
         }
 
-        var remainingCount = participants.Count - toRemove.Count;
+        var remainingCount = participants.Count - toBeRemovedParticipants.Count;
         if (remainingCount <= 1)
         {
             conversation.IsReadonly = true;
         }
 
-        foreach (var participant in toRemove)
-        {
-            db.Remove(participant);
-        }
-
+        db.RemoveRange(toBeRemovedParticipants);
         await db.SaveChangesAsync(cancellationToken);
 
-        foreach (var userId in targetIds)
+        foreach (var userId in toBeRemovedUserIds)
         {
             await notifier.NotifyMemberChangedAsync(conversation.Id, userId, MemberChangeAction.Left, cancellationToken);
         }

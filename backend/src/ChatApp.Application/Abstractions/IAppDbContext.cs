@@ -38,6 +38,9 @@ public interface IAppDbContext
     /// <summary>Marks <paramref name="entity"/> for deletion on the next <see cref="SaveChangesAsync"/>.</summary>
     void Remove<TEntity>(TEntity entity) where TEntity : class;
 
+    /// <summary>Marks each of <paramref name="entities"/> for deletion on the next <see cref="SaveChangesAsync"/>.</summary>
+    void RemoveRange<TEntity>(IEnumerable<TEntity> entities) where TEntity : class;
+
     /// <summary>Asynchronously executes <paramref name="query"/> and returns its first result, or null if empty.</summary>
     Task<TEntity?> FirstOrDefaultAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken);
 
@@ -50,6 +53,6 @@ public interface IAppDbContext
     /// <summary>Asynchronously executes <paramref name="query"/> and returns whether it has any results.</summary>
     Task<bool> AnyAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken);
 
-    /// <summary>Persists every pending <see cref="Add{TEntity}"/>/<see cref="Remove{TEntity}"/> and property change, returning the number of affected rows.</summary>
+    /// <summary>Persists every pending add/remove and property change, returning the number of affected rows.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
