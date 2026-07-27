@@ -9,7 +9,7 @@ namespace ChatApp.Application.Memory;
 /// Uses only Application ports — no direct AI SDK or EF Core calls. Called by Api's background
 /// worker (threshold trigger) and by <c>SummarizeThread</c> (on-demand trigger).
 /// </summary>
-public sealed class MemoryService(IAppDbContext db, ISummaryService summaryService)
+public sealed class ConversationMemoryService(IAppDbContext db, ISummaryService summaryService)
 {
     /// <summary>
     /// If the conversation's pending token count has reached <paramref name="thresholdTokens"/>,
@@ -32,7 +32,7 @@ public sealed class MemoryService(IAppDbContext db, ISummaryService summaryServi
             return;
         }
 
-        var chunkSummary = await summaryService.SummarizeAsync(memory.GlobalMemory, pending, cancellationToken);
+        var chunkSummary = await summaryService.GenerateSummaryAsync(memory.GlobalMemory, pending, cancellationToken);
         var foldedMemory = await summaryService.FoldAsync(memory.GlobalMemory, chunkSummary, cancellationToken);
 
         db.Add(new ChunkMemory
@@ -55,7 +55,7 @@ public sealed class MemoryService(IAppDbContext db, ISummaryService summaryServi
     /// after the last chunk's pointer — regardless of whether the pending-token threshold has been
     /// crossed. The fresh summary is never persisted as a chunk; it is always recomputed.
     /// </summary>
-    public async Task<OnDemandSummary> GenerateSummaryAsync(Guid conversationId, CancellationToken cancellationToken)
+    public async Task<OnDemandSummary> UpdateMemoryAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         var memory = await db.FirstOrDefaultAsync(db.ConversationMemories.Where(m => m.ConversationId == conversationId), cancellationToken);
         var globalMemory = memory?.GlobalMemory ?? string.Empty;
@@ -65,7 +65,7 @@ public sealed class MemoryService(IAppDbContext db, ISummaryService summaryServi
 
         var recentSummary = recentMessages.Count == 0
             ? string.Empty
-            : await summaryService.SummarizeAsync(globalMemory, recentMessages, cancellationToken);
+            : await summaryService.GenerateSummaryAsync(globalMemory, recentMessages, cancellationToken);
 
         return new OnDemandSummary(globalMemory, recentSummary);
     }

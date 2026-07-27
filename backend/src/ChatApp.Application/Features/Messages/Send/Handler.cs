@@ -11,7 +11,7 @@ public sealed class Handler(
     ICurrentUser currentUser,
     ITokenCounter tokenCounter,
     IMemoryQueue memoryQueue,
-    IChatNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
+    IConversationNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
 {
     /// <summary>
     /// Persists the text message, accrues its token count onto the conversation's pending memory
@@ -36,7 +36,7 @@ public sealed class Handler(
         };
         db.Add(message);
 
-        await tokenCounter.AddPendingTokensAsync(conversation.Id, request.Content, cancellationToken);
+        await tokenCounter.UpdatePendingTokensAsync(conversation.Id, request.Content, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
         await memoryQueue.EnqueueAsync(conversation.Id, cancellationToken);

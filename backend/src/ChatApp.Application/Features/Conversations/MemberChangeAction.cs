@@ -4,7 +4,7 @@ namespace ChatApp.Application.Features.Conversations;
 
 /// <summary>
 /// Whether a user entered or left a conversation's membership, broadcast via
-/// <see cref="IChatNotifier.NotifyMemberChangedAsync"/>. Covers both self-service and owner-driven
+/// <see cref="IConversationNotifier.NotifyMemberChangedAsync"/>. Covers both self-service and owner-driven
 /// changes (join/add both become <see cref="Joined"/>; leave/remove both become <see cref="Left"/>)
 /// since clients only need to know whether to add or drop the member from their view.
 /// </summary>

@@ -26,7 +26,7 @@ public interface IOcrService
     /// return immediately after acquiring the lock (§7's 202/<c>PROCESSING</c> response) while this
     /// keeps running after that request's scope has ended. Implementations must therefore open
     /// their own DI scope (e.g. via <c>IServiceScopeFactory</c>) and resolve their own
-    /// <see cref="IAppDbContext"/>/<see cref="IChatNotifier"/> instances from it — they must never
+    /// <see cref="IAppDbContext"/>/<see cref="IConversationNotifier"/> instances from it — they must never
     /// reuse the scoped instances that were injected into the caller, since those are disposed once
     /// the caller's scope (the original HTTP request) ends.
     /// </para>

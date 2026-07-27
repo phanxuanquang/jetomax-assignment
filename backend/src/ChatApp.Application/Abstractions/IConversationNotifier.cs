@@ -7,7 +7,7 @@ namespace ChatApp.Application.Abstractions;
 /// The port onto realtime broadcast (§5). Postgres is the source of truth; these calls only notify
 /// connected clients so they can update live — a reconnecting client always re-fetches from REST/queries.
 /// </summary>
-public interface IChatNotifier
+public interface IConversationNotifier
 {
     /// <summary>Broadcasts a newly persisted message to every member of <paramref name="conversationId"/>.</summary>
     Task NotifyNewMessageAsync(Guid conversationId, Message message, CancellationToken cancellationToken);

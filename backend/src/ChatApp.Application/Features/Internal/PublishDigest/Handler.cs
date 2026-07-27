@@ -5,9 +5,9 @@ using MediatR;
 namespace ChatApp.Application.Features.Internal.PublishDigest;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
-public sealed class Handler(IChatNotifier notifier) : IRequestHandler<Command, Result>
+public sealed class Handler(IConversationNotifier notifier) : IRequestHandler<Command, Result>
 {
-    /// <summary>Relays the digest via <see cref="IChatNotifier.NotifyDigestPublishedAsync"/>; nothing is persisted.</summary>
+    /// <summary>Relays the digest via <see cref="IConversationNotifier.NotifyDigestPublishedAsync"/>; nothing is persisted.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
         await notifier.NotifyDigestPublishedAsync(request.Digest, request.PublishedAt, cancellationToken);

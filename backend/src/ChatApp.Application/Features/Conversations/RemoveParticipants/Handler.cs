@@ -5,7 +5,7 @@ using MediatR;
 namespace ChatApp.Application.Features.Conversations.RemoveParticipants;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNotifier notifier)
+public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConversationNotifier notifier)
     : IRequestHandler<Command, Result>
 {
     /// <summary>

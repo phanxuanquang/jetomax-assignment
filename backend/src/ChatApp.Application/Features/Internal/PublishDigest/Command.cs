@@ -5,7 +5,7 @@ namespace ChatApp.Application.Features.Internal.PublishDigest;
 
 /// <summary>
 /// Relays n8n's 24-hour digest to whatever page/channel displays it (§6.2). N8n-only. Stateless:
-/// the backend does not persist the digest, only broadcasts it via <see cref="Abstractions.IChatNotifier"/>.
+/// the backend does not persist the digest, only broadcasts it via <see cref="Abstractions.IConversationNotifier"/>.
 /// </summary>
 /// <param name="Digest">The digest content to relay.</param>
 /// <param name="PublishedAt">When the digest was produced.</param>

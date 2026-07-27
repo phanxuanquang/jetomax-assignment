@@ -14,7 +14,7 @@ public sealed class Handler(
     IVisionService visionService,
     ITokenCounter tokenCounter,
     IMemoryQueue memoryQueue,
-    IChatNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
+    IConversationNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
 {
     private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(8);
 
@@ -48,7 +48,7 @@ public sealed class Handler(
         };
         db.Add(message);
 
-        await tokenCounter.AddPendingTokensAsync(conversation.Id, caption ?? string.Empty, cancellationToken);
+        await tokenCounter.UpdatePendingTokensAsync(conversation.Id, caption ?? string.Empty, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
         await memoryQueue.EnqueueAsync(conversation.Id, cancellationToken);

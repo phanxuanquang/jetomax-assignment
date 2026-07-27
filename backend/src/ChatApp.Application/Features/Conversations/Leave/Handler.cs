@@ -5,7 +5,7 @@ using MediatR;
 namespace ChatApp.Application.Features.Conversations.Leave;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNotifier notifier)
+public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConversationNotifier notifier)
     : IRequestHandler<Command, Result>
 {
     /// <summary>
@@ -16,13 +16,13 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNot
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
-        if (!callerResult.IsSuccess)
+        var currentUserResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (!currentUserResult.IsSuccess)
         {
-            return Result.Failure(callerResult.Error!);
+            return Result.Failure(currentUserResult.Error!);
         }
 
-        var callerId = callerResult.Value!.Id;
+        var currentUserId = currentUserResult.Value!.Id;
 
         var conversation = await db.FirstOrDefaultAsync(
             db.Conversations.Where(c => c.Id == request.ConversationId && !c.IsDeleted),
@@ -34,15 +34,15 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNot
         }
 
         var participant = await db.FirstOrDefaultAsync(
-            db.Participants.Where(p => p.ConversationId == conversation.Id && p.UserId == callerId),
+            db.Participants.Where(p => p.ConversationId == conversation.Id && p.UserId == currentUserId),
             cancellationToken);
 
         if (participant is null)
         {
-            return Result.Failure(Error.Forbidden("conversation.leave.not_participant", "The caller is not a participant of this conversation."));
+            return Result.Failure(Error.Forbidden("conversation.leave.not_participant", "You are not a participant of this conversation."));
         }
 
-        var isOwner = conversation.OwnerId == callerId;
+        var isOwner = conversation.OwnerId == currentUserId;
 
         if (isOwner)
         {
@@ -62,7 +62,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNot
         }
 
         var remainingCount = await db.CountAsync(
-            db.Participants.Where(p => p.ConversationId == conversation.Id && p.UserId != callerId),
+            db.Participants.Where(p => p.ConversationId == conversation.Id && p.UserId != currentUserId),
             cancellationToken);
         if (remainingCount <= 1)
         {
@@ -71,7 +71,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNot
 
         db.Remove(participant);
         await db.SaveChangesAsync(cancellationToken);
-        await notifier.NotifyMemberChangedAsync(conversation.Id, callerId, MemberChangeAction.Left, cancellationToken);
+        await notifier.NotifyMemberChangedAsync(conversation.Id, currentUserId, MemberChangeAction.Left, cancellationToken);
         return Result.Success();
     }
 }

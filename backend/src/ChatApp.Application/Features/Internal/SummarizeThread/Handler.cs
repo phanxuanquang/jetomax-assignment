@@ -6,7 +6,7 @@ using MediatR;
 namespace ChatApp.Application.Features.Internal.Summarize;
 
 /// <summary>Handles <see cref="Query"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, MemoryService memoryService)
+public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, ConversationMemoryService memoryService)
     : IRequestHandler<Query, Result<ThreadSummaryDto>>
 {
     /// <summary>
@@ -26,7 +26,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, MemorySe
             return Result<ThreadSummaryDto>.Failure(Error.NotFound("conversation.not_found", "Conversation not found."));
         }
 
-        var summary = await memoryService.GenerateSummaryAsync(request.ConversationId, cancellationToken);
+        var summary = await memoryService.UpdateMemoryAsync(request.ConversationId, cancellationToken);
         return Result<ThreadSummaryDto>.Success(new ThreadSummaryDto(summary.GlobalMemory, summary.RecentSummary));
     }
 }

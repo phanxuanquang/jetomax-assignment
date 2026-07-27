@@ -9,7 +9,7 @@ namespace ChatApp.Application.Features.Messages.OcrImageMessage;
 public sealed class Handler(
     IAppDbContext db,
     ICurrentUser currentUser,
-    IChatNotifier notifier,
+    IConversationNotifier notifier,
     IOcrService ocrService) : IRequestHandler<Command, Result>
 {
     /// <summary>

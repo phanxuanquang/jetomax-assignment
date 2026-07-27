@@ -8,12 +8,12 @@ namespace ChatApp.Application.Abstractions;
 public interface ITokenCounter
 {
     /// <summary>Counts the tokens in <paramref name="text"/>. For an image message, callers pass its caption.</summary>
-    int CountTokens(string text);
+    Task CountTokensAsync(string text);
 
     /// <summary>
     /// Counts the tokens in <paramref name="text"/> and adds them to <paramref name="conversationId"/>'s
     /// pending counter. A missing memory row is treated as nothing to accrue rather than a failure —
     /// bookkeeping must never block the message that triggered it.
     /// </summary>
-    Task AddPendingTokensAsync(Guid conversationId, string text, CancellationToken cancellationToken);
+    Task UpdatePendingTokensAsync(Guid conversationId, string text, CancellationToken cancellationToken);
 }
