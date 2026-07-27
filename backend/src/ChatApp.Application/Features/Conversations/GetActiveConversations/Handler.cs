@@ -2,8 +2,9 @@ using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
 using ChatApp.Domain.Entities;
 using MediatR;
+using System.Collections.Frozen;
 
-namespace ChatApp.Application.Features.Conversations.Get;
+namespace ChatApp.Application.Features.Conversations.GetActiveConversations;
 
 /// <summary>Handles <see cref="Query"/>.</summary>
 public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
@@ -16,28 +17,28 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
     /// </summary>
     public async Task<Result<IReadOnlyList<ConversationDto>>> Handle(Query request, CancellationToken cancellationToken)
     {
-        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
-        if (!callerResult.IsSuccess)
+        var currentUserResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (!currentUserResult.IsSuccess)
         {
-            return Result<IReadOnlyList<ConversationDto>>.Failure(callerResult.Error!);
+            return Result<IReadOnlyList<ConversationDto>>.Failure(currentUserResult.Error!);
         }
 
-        var callerId = callerResult.Value!.Id;
+        var currentUserId = currentUserResult.Value!.Id;
 
         IQueryable<Conversation> query = db.Conversations
             .Where(c => !c.IsDeleted)
-            .Where(c => db.Participants.Any(p => p.ConversationId == c.Id && p.UserId == callerId));
+            .Where(c => db.Participants.Any(p => p.ConversationId == c.Id && p.UserId == currentUserId));
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
             var term = request.SearchTerm.ToLowerInvariant().Trim();
-            query = query.Where(c => c.DisplayName.ToLower().Contains(term));
+            query = query.Where(c => c.DisplayName.Contains(term, StringComparison.CurrentCultureIgnoreCase));
         }
 
         query = query.OrderByDescending(c => c.LastMessageTime);
 
         var conversations = await db.ToListAsync(query, cancellationToken);
-        var conversationIds = conversations.Select(c => c.Id).ToList();
+        var conversationIds = conversations.Select(c => c.Id).ToFrozenSet();
 
         var participants = await db.ToListAsync(
             db.Participants.Where(p => conversationIds.Contains(p.ConversationId)),
@@ -45,7 +46,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
 
         var participantIdsByConversation = participants
             .GroupBy(p => p.ConversationId)
-            .ToDictionary(g => g.Key, g => (IReadOnlyCollection<Guid>)[.. g.Select(p => p.UserId)]);
+            .ToFrozenDictionary(g => g.Key, g => (IReadOnlyCollection<Guid>)[.. g.Select(p => p.UserId)]);
 
         var dtos = conversations
             .Select(c => new ConversationDto(
