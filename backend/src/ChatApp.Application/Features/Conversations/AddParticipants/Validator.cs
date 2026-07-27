@@ -11,14 +11,14 @@ public sealed class Validator : AbstractValidator<Command>
         RuleFor(x => x.ConversationId).NotEmpty();
 
         RuleFor(x => x.UserIds)
-            .NotEmpty().WithMessage("At least one user id is required.");
+            .NotEmpty().WithMessage("At least one user ID is required.");
 
         RuleForEach(x => x.UserIds)
-            .NotEqual(Guid.Empty).WithMessage("User ids must not be empty.");
+            .NotEqual(Guid.Empty).WithMessage("User IDs must not be empty.");
 
         RuleFor(x => x.UserIds)
             .Must(ids => ids.Distinct().Count() == ids.Count)
-            .WithMessage("User ids must not contain duplicates.")
+            .WithMessage("User IDs must not contain duplicates.")
             .When(x => x.UserIds.Count > 0);
     }
 }
