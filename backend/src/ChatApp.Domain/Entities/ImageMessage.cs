@@ -1,5 +1,4 @@
 using ChatApp.Domain.Enums;
-using System.ComponentModel.DataAnnotations;
 
 namespace ChatApp.Domain.Entities;
 
@@ -12,7 +11,6 @@ public sealed class ImageMessage : Message
     /// <summary>
     /// Location of the image in Supabase Storage. The backend never stores the image bytes themselves.
     /// </summary>
-    [Required]
     public required string ImageUrl { get; init; }
 
     /// <summary>
@@ -30,5 +28,8 @@ public sealed class ImageMessage : Message
     /// </summary>
     public string? OcrContent { get; set; }
 
+    /// <summary>
+    /// Always <see cref="MessageType.Image"/> for this concrete payload.
+    /// </summary>
     public override MessageType Type => MessageType.Image;
 }

@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace ChatApp.Domain.Entities;
 
 /// <summary>
@@ -20,19 +18,18 @@ public sealed class ChunkMemory
     public Guid ConversationId { get; init; }
 
     /// <summary>
-    /// First message covered by this chunk.
+    /// First message covered by this chunk. Null if that message was later removed.
     /// </summary>
-    public Guid StartMessageId { get; init; }
+    public Guid? StartMessageId { get; init; }
 
     /// <summary>
-    /// Last message covered by this chunk; the rolling pointer.
+    /// Last message covered by this chunk; the rolling pointer. Null if that message was later removed.
     /// </summary>
-    public Guid EndMessageId { get; init; }
+    public Guid? EndMessageId { get; init; }
 
     /// <summary>
     /// The chunk's summary text.
     /// </summary>
-    [Required]
     public required string Memory { get; init; }
 
     /// <summary>

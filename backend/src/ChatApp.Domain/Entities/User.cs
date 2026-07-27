@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace ChatApp.Domain.Entities;
 
 /// <summary>
@@ -15,11 +13,9 @@ public sealed class User
     public Guid Id { get; } = Guid.NewGuid();
 
     /// <summary>
-    /// Unique login handle: letters and digits only, 1-30 characters, and not all digits.
+    /// Unique login handle; the user's public identity. Format and uniqueness are enforced by
+    /// FluentValidation (Application) and the DB CHECK/UNIQUE constraint (Infrastructure), not Domain.
     /// </summary>
-    [Required]
-    [StringLength(30, MinimumLength = 1, ErrorMessage = "Username must be 1-30 characters long.")]
-    [RegularExpression(@"^(?=.*[A-Za-z])[A-Za-z0-9]+$", ErrorMessage = "Username may only contain letters and digits, and cannot be all digits.")]
     public required string Username { get; init; }
 
     /// <summary>

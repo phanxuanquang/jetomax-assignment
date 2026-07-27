@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace ChatApp.Domain.Entities;
 
 /// <summary>
@@ -13,17 +11,17 @@ public sealed class Conversation
     public Guid Id { get; } = Guid.NewGuid();
 
     /// <summary>
-    /// Backend-generated, 6-character, case-sensitive alphanumeric code used to join this conversation. Not all digits.
+    /// Backend-generated, case-sensitive alphanumeric code used to join this conversation. Format
+    /// and uniqueness are enforced by FluentValidation (Application) and the DB CHECK/UNIQUE
+    /// constraint (Infrastructure), not Domain.
     /// </summary>
-    [Required]
-    [RegularExpression(@"^(?=.*[A-Za-z])[A-Za-z0-9]{6}$", ErrorMessage = "PublicId must be exactly 6 letters or digits, and cannot be all digits.")]
     public required string PublicId { get; init; }
 
     /// <summary>
-    /// Auto-generated at creation from participant usernames; renamable by the owner. Only letters, digits, and commas.
+    /// Auto-generated at creation from participant usernames; renamable by the owner. This is a
+    /// cosmetic field validated only by FluentValidation (Application) — it is not an integrity
+    /// concern, so Domain places no constraint on it.
     /// </summary>
-    [Required]
-    [RegularExpression("^[A-Za-z0-9,]+$", ErrorMessage = "DisplayName may only contain letters, digits, and commas.")]
     public required string DisplayName { get; init; }
 
     /// <summary>

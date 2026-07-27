@@ -25,7 +25,11 @@ public abstract class Message
     public Guid UserId { get; init; }
 
     /// <summary>
-    /// Which concrete payload this message carries. Computed from the runtime type, so it can never disagree with whether this instance is actually a <see cref="TextMessage"/> or <see cref="ImageMessage"/>.
+    /// Which concrete payload this message carries. Computed from the runtime type, so it can never
+    /// disagree with whether this instance is actually a <see cref="TextMessage"/> or <see cref="ImageMessage"/>.
+    /// <c>schema.sql</c> stores this as a real, persisted <c>type</c> column on the <c>messages</c>
+    /// table; Infrastructure (EF Core) is responsible for mapping this computed property to that
+    /// column — it must not be mapped as a plain settable scalar.
     /// </summary>
     public abstract MessageType Type { get; }
 

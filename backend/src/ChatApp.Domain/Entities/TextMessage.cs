@@ -1,5 +1,4 @@
 using ChatApp.Domain.Enums;
-using System.ComponentModel.DataAnnotations;
 
 namespace ChatApp.Domain.Entities;
 
@@ -10,11 +9,12 @@ namespace ChatApp.Domain.Entities;
 public sealed class TextMessage : Message
 {
     /// <summary>
-    /// The message body which is in markdown.
+    /// The message body, in markdown.
     /// </summary>
-    [Required]
-    [StringLength(500, MinimumLength = 1, ErrorMessage = "Text message content must be 1-500 characters long.")]
     public required string Content { get; init; }
 
+    /// <summary>
+    /// Always <see cref="MessageType.Text"/> for this concrete payload.
+    /// </summary>
     public override MessageType Type => MessageType.Text;
 }

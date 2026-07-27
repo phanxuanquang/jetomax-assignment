@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace ChatApp.Domain.Entities;
 
 /// <summary>
@@ -21,7 +19,6 @@ public sealed class ConversationMemory
     /// <summary>
     /// Tokens accrued since the last chunk; an image message counts its caption's tokens. Never negative; starts at zero.
     /// </summary>
-    [Range(0, int.MaxValue, ErrorMessage = "PendingTokens cannot be negative.")]
     public int PendingTokens { get; set; } = 0;
 
     /// <summary>
