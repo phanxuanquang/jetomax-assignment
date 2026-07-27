@@ -1,4 +1,6 @@
-namespace ChatApp.Application.Abstractions;
+using ChatApp.Application.Abstractions;
+
+namespace ChatApp.Application.Features.Conversations;
 
 /// <summary>
 /// Whether a user entered or left a conversation's membership, broadcast via

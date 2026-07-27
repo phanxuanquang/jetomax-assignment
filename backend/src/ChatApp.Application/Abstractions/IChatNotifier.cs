@@ -1,3 +1,4 @@
+using ChatApp.Application.Features.Conversations;
 using ChatApp.Domain.Entities;
 
 namespace ChatApp.Application.Abstractions;
