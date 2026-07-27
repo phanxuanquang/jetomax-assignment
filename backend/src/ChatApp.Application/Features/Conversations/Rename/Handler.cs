@@ -11,13 +11,20 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
     /// <summary>Owner-only: updates the conversation's <c>DisplayName</c>.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var guard = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
-        if (!guard.IsSuccess)
+        var getOwnedConversationResult = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
+        if (!getOwnedConversationResult.IsSuccess)
         {
-            return Result.Failure(guard.Error!);
+            return Result.Failure(getOwnedConversationResult.Error!);
         }
 
-        guard.Value!.DisplayName = request.DisplayName;
+        var conversation = getOwnedConversationResult.Value!;
+
+        if (conversation.DisplayName == request.DisplayName.Trim())
+        {
+            return Result.Success();
+        }
+
+        conversation.DisplayName = request.DisplayName.Trim();
         await db.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }

@@ -11,13 +11,19 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
     /// <summary>Owner-only: sets the conversation's <c>IsReadonly</c> flag manually.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var guard = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
-        if (!guard.IsSuccess)
+        var getOwnedConversationResult = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
+        if (!getOwnedConversationResult.IsSuccess)
         {
-            return Result.Failure(guard.Error!);
+            return Result.Failure(getOwnedConversationResult.Error!);
         }
 
-        guard.Value!.IsReadonly = request.IsReadonly;
+        var conversation = getOwnedConversationResult.Value!;
+        if (conversation.IsReadonly == request.IsReadonly)
+        {
+            return Result.Success();
+        }
+
+        conversation.IsReadonly = request.IsReadonly;
         await db.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
