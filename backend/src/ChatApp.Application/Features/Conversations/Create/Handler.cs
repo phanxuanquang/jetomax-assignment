@@ -1,0 +1,125 @@
+using ChatApp.Application.Abstractions;
+using ChatApp.Application.Common.Results;
+using ChatApp.Domain.Entities;
+using MediatR;
+
+namespace ChatApp.Application.Features.Conversations.Create;
+
+/// <summary>Handles <see cref="Command"/>.</summary>
+public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
+    : IRequestHandler<Command, Result<ConversationDto>>
+{
+    private const string PublicIdAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private const int PublicIdLength = 6;
+    private const int MaxPublicIdAttempts = 10;
+
+    /// <summary>
+    /// Validates the other participants exist, generates a unique <c>PublicId</c> and initial
+    /// <c>DisplayName</c>, and creates the conversation with the caller as owner alongside its
+    /// owner/other participant rows and empty memory row.
+    /// </summary>
+    public async Task<Result<ConversationDto>> Handle(Command request, CancellationToken cancellationToken)
+    {
+        if (currentUser.UserId is not { } ownerId)
+        {
+            return Result<ConversationDto>.Failure(Error.Forbidden("conversation.create.no_identity", "The caller has no user identity."));
+        }
+
+        var otherIds = request.ParticipantUserIds.Where(id => id != ownerId).Distinct().ToList();
+        if (otherIds.Count == 0)
+        {
+            return Result<ConversationDto>.Failure(Error.Validation(
+                "conversation.create.needs_other_participant",
+                "A conversation needs at least one other participant besides the caller."));
+        }
+
+        var owner = await db.FirstOrDefaultAsync(db.Users.Where(u => u.Id == ownerId), cancellationToken);
+        if (owner is null)
+        {
+            return Result<ConversationDto>.Failure(Error.NotFound("user.not_found", "The caller's user record was not found."));
+        }
+
+        var others = await db.ToListAsync(db.Users.Where(u => otherIds.Contains(u.Id) && !u.IsAgent), cancellationToken);
+        if (others.Count != otherIds.Count)
+        {
+            return Result<ConversationDto>.Failure(Error.NotFound("user.not_found", "One or more participants do not exist."));
+        }
+
+        var publicId = await GenerateUniquePublicIdAsync(db, cancellationToken);
+        if (publicId is null)
+        {
+            return Result<ConversationDto>.Failure(Error.Unexpected(
+                "conversation.create.public_id_exhausted",
+                "Could not generate a unique public id; please retry."));
+        }
+
+        var conversation = new Conversation
+        {
+            PublicId = publicId,
+            DisplayName = BuildDisplayName(owner.Username, others.Select(u => u.Username)),
+            OwnerId = ownerId
+        };
+
+        db.Add(conversation);
+        db.Add(new Participant
+        {
+            ConversationId = conversation.Id,
+            UserId = ownerId
+        });
+        db.AddRange(otherIds.Select(id => new Participant
+        {
+            ConversationId = conversation.Id,
+            UserId = id
+        }));
+
+        db.Add(new ConversationMemory
+        {
+            ConversationId = conversation.Id
+        });
+
+        await db.SaveChangesAsync(cancellationToken);
+
+        var dto = new ConversationDto(
+            conversation.Id,
+            conversation.PublicId,
+            conversation.DisplayName,
+            conversation.OwnerId,
+            conversation.IsReadonly,
+            conversation.CreatedTime,
+            conversation.LastMessageTime,
+            [ownerId, .. otherIds]);
+
+        return Result<ConversationDto>.Success(dto);
+    }
+
+    private static string BuildDisplayName(string ownerUsername, IEnumerable<string> otherUsernames)
+    {
+        var names = new List<string> { ownerUsername };
+        names.AddRange(otherUsernames.Take(2));
+        return string.Join(", ", names);
+    }
+
+    private static async Task<string?> GenerateUniquePublicIdAsync(IAppDbContext db, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < MaxPublicIdAttempts; attempt++)
+        {
+            var candidate = GenerateCandidate();
+            var exists = await db.AnyAsync(db.Conversations.Where(c => c.PublicId == candidate), cancellationToken);
+            if (!exists)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static string GenerateCandidate() =>
+        string.Create(PublicIdLength, 0, static (span, _) =>
+        {
+            for (var i = 0; i < span.Length; i++)
+            {
+                span[i] = PublicIdAlphabet[Random.Shared.Next(PublicIdAlphabet.Length)];
+            }
+        });
+}
