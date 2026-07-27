@@ -7,7 +7,7 @@ namespace ChatApp.Application.Features.Conversations.Join;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
 public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConversationNotifier notifier)
-    : IRequestHandler<Command, Result<ConversationDto>>
+    : IRequestHandler<Command, Result>
 {
     /// <summary>
     /// Looks up the conversation by <c>PublicId</c>, rejects frozen/deleted/missing conversations,
@@ -16,15 +16,15 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
     /// once and reuses it for both the membership check and the returned DTO, rather than querying
     /// it multiple times.
     /// </summary>
-    public async Task<Result<ConversationDto>> Handle(Command request, CancellationToken cancellationToken)
+    public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
-        if (!callerResult.IsSuccess)
+        var currentUserResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (!currentUserResult.IsSuccess)
         {
-            return Result<ConversationDto>.Failure(callerResult.Error!);
+            return Result<ConversationDto>.Failure(currentUserResult.Error!);
         }
 
-        var callerId = callerResult.Value!.Id;
+        var currentUserId = currentUserResult.Value!.Id;
 
         var conversation = await db.FirstOrDefaultAsync(
             db.Conversations.Where(c => c.PublicId == request.PublicId && !c.IsDeleted),
@@ -32,7 +32,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
 
         if (conversation is null)
         {
-            return Result<ConversationDto>.Failure(Error.NotFound("conversation.not_found", "No joinable conversation has this public id."));
+            return Result<ConversationDto>.Failure(Error.NotFound("conversation.not_found", "Conversation not found."));
         }
 
         if (conversation.OwnerId is null)
@@ -44,30 +44,20 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
             db.Participants.Where(p => p.ConversationId == conversation.Id).Select(p => p.UserId),
             cancellationToken);
 
-        if (!participantIds.Contains(callerId))
+        if (!participantIds.Contains(currentUserId))
         {
             if (participantIds.Count + 1 == 2)
             {
                 conversation.IsReadonly = false;
             }
 
-            db.Add(new Participant(conversation.Id, callerId));
+            db.Add(new Participant(conversation.Id, currentUserId));
             await db.SaveChangesAsync(cancellationToken);
-            await notifier.NotifyMemberChangedAsync(conversation.Id, callerId, MemberChangeAction.Joined, cancellationToken);
+            await notifier.NotifyMemberChangedAsync(conversation.Id, currentUserId, MemberChangeAction.Joined, cancellationToken);
 
-            participantIds.Add(callerId);
+            participantIds.Add(currentUserId);
         }
 
-        var dto = new ConversationDto(
-            conversation.Id,
-            conversation.PublicId,
-            conversation.DisplayName,
-            conversation.OwnerId,
-            conversation.IsReadonly,
-            conversation.CreatedTime,
-            conversation.LastMessageTime,
-            participantIds);
-
-        return Result<ConversationDto>.Success(dto);
+        return Result<ConversationDto>.Success();
     }
 }
