@@ -430,7 +430,7 @@ Arrows are compile-time references. **`Application` never references `Infrastruc
 | Project | Role | Change it when… |
 |---|---|---|
 | **Domain** | Entities, enums, invariant guards; zero dependencies | a field/entity or business invariant changes |
-| **Application** | Vertical-slice use cases (MediatR) + **ports** (`IAppDbContext`, `IChatNotifier`, `IStorageClient`, `IVisionService`, `ISummaryService`, `IOcrService`, `IMemoryQueue`, `ICurrentUser`) | you add a use case or change business flow |
+| **Application** | Vertical-slice use cases (MediatR) + **ports** (`IAppDbContext`, `IChatNotifier`, `IStorageClient`, `IVisionService`, `ISummaryService`, `IOcrService`, `IMemoryQueue`, `ITokenCounter`, `ICurrentUser`) | you add a use case or change business flow |
 | **Infrastructure** | **Adapters**: EF Core/Npgsql, Supabase Storage, SK+Gemini, tokenizer, memory worker plumbing | you swap DB / storage / AI provider |
 | **Api** | Host: controllers, SignalR Hub, `[AllowedClients]`, DI, background service | you change routes, realtime, or client auth |
 
