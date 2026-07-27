@@ -11,10 +11,13 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
     /// <summary>Returns up to <see cref="Query.Limit"/> messages, newest first, strictly older than <see cref="Query.Before"/> when given.</summary>
     public async Task<Result<IReadOnlyList<MessageDto>>> Handle(Query request, CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not { } callerId)
+        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (!callerResult.IsSuccess)
         {
-            return Result<IReadOnlyList<MessageDto>>.Failure(Error.Forbidden("message.list.no_identity", "The caller has no user identity."));
+            return Result<IReadOnlyList<MessageDto>>.Failure(callerResult.Error!);
         }
+
+        var callerId = callerResult.Value!.Id;
 
         var isParticipant = await db.AnyAsync(
             db.Participants.Where(p => p.ConversationId == request.ConversationId && p.UserId == callerId),

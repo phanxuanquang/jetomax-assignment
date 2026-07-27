@@ -19,10 +19,13 @@ public sealed class Handler(
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not { } callerId)
+        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (!callerResult.IsSuccess)
         {
-            return Result.Failure(Error.Forbidden("ocr.trigger.no_identity", "The caller has no user identity."));
+            return Result.Failure(callerResult.Error!);
         }
+
+        var callerId = callerResult.Value!.Id;
 
         var image = await db.FirstOrDefaultAsync(
             db.Messages.OfType<ImageMessage>().Where(m => m.Id == request.MessageId),

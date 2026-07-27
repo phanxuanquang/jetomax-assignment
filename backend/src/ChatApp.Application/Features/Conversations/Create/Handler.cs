@@ -20,10 +20,14 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
     /// </summary>
     public async Task<Result<ConversationDto>> Handle(Command request, CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not { } ownerId)
+        var ownerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (!ownerResult.IsSuccess)
         {
-            return Result<ConversationDto>.Failure(Error.Forbidden("conversation.create.no_identity", "The caller has no user identity."));
+            return Result<ConversationDto>.Failure(ownerResult.Error!);
         }
+
+        var owner = ownerResult.Value!;
+        var ownerId = owner.Id;
 
         var otherIds = request.ParticipantUserIds.Where(id => id != ownerId).Distinct().ToList();
         if (otherIds.Count == 0)
@@ -31,12 +35,6 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
             return Result<ConversationDto>.Failure(Error.Validation(
                 "conversation.create.needs_other_participant",
                 "A conversation needs at least one other participant besides the caller."));
-        }
-
-        var owner = await db.FirstOrDefaultAsync(db.Users.Where(u => u.Id == ownerId), cancellationToken);
-        if (owner is null)
-        {
-            return Result<ConversationDto>.Failure(Error.NotFound("user.not_found", "The caller's user record was not found."));
         }
 
         var others = await db.ToListAsync(db.Users.Where(u => otherIds.Contains(u.Id) && !u.IsAgent), cancellationToken);

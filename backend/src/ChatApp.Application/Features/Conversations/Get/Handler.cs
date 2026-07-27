@@ -16,10 +16,13 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
     /// </summary>
     public async Task<Result<IReadOnlyList<ConversationDto>>> Handle(Query request, CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not { } callerId)
+        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (!callerResult.IsSuccess)
         {
-            return Result<IReadOnlyList<ConversationDto>>.Failure(Error.Forbidden("conversation.list.no_identity", "The caller has no user identity."));
+            return Result<IReadOnlyList<ConversationDto>>.Failure(callerResult.Error!);
         }
+
+        var callerId = callerResult.Value!.Id;
 
         IQueryable<Conversation> query = db.Conversations
             .Where(c => !c.IsDeleted)

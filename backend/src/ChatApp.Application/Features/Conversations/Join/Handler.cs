@@ -18,10 +18,13 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNot
     /// </summary>
     public async Task<Result<ConversationDto>> Handle(Command request, CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not { } callerId)
+        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (!callerResult.IsSuccess)
         {
-            return Result<ConversationDto>.Failure(Error.Forbidden("conversation.join.no_identity", "The caller has no user identity."));
+            return Result<ConversationDto>.Failure(callerResult.Error!);
         }
+
+        var callerId = callerResult.Value!.Id;
 
         var conversation = await db.FirstOrDefaultAsync(
             db.Conversations.Where(c => c.PublicId == request.PublicId && !c.IsDeleted),

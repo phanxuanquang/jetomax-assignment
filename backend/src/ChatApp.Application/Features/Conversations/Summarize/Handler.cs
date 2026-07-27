@@ -1,5 +1,4 @@
 using ChatApp.Application.Abstractions;
-using ChatApp.Application.Common;
 using ChatApp.Application.Common.Results;
 using ChatApp.Application.Memory;
 using MediatR;
@@ -11,8 +10,9 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, MemorySe
     : IRequestHandler<Query, Result<ThreadSummaryDto>>
 {
     /// <summary>
-    /// Confirms the conversation exists and, for App/Mcp callers, that the caller is a participant
-    /// — <see cref="Client.N8n"/> carries no user and summarizes any thread for the daily digest.
+    /// Confirms the conversation exists and, when the caller carries a user identity, that they are
+    /// a participant — a caller with no identity (e.g. n8n) skips the check and summarizes any
+    /// thread for the daily digest.
     /// </summary>
     public async Task<Result<ThreadSummaryDto>> Handle(Query request, CancellationToken cancellationToken)
     {
@@ -25,12 +25,10 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, MemorySe
             return Result<ThreadSummaryDto>.Failure(Error.NotFound("conversation.not_found", "Conversation not found."));
         }
 
-        if (currentUser.Client != Client.N8n)
+        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        if (callerResult.IsSuccess)
         {
-            if (currentUser.UserId is not { } callerId)
-            {
-                return Result<ThreadSummaryDto>.Failure(Error.Forbidden("summary.no_identity", "The caller has no user identity."));
-            }
+            var callerId = callerResult.Value!.Id;
 
             var isParticipant = await db.AnyAsync(
                 db.Participants.Where(p => p.ConversationId == request.ConversationId && p.UserId == callerId),

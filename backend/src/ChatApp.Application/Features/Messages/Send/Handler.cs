@@ -26,7 +26,7 @@ public sealed class Handler(
         }
 
         var conversation = guard.Value!;
-        var callerId = currentUser.UserId!.Value;
+        var callerId = (await currentUser.GetCurrentUserAsync(cancellationToken)).Value!.Id;
 
         var message = new TextMessage
         {
