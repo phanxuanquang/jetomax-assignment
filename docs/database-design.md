@@ -26,7 +26,6 @@ erDiagram
     profiles {
         uuid id PK
         text username UK
-        text display_name
         bool is_agent
     }
     conversations {
@@ -85,8 +84,7 @@ Eight tables: users, conversations, participants, a table-per-type message trio,
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | uuid | PK | = Supabase auth id |
-| `username` | text | **unique**, `~ '^[A-Za-z0-9]{1,30}$'` | letters + digits, ≤30 |
-| `display_name` | text | not null | |
+| `username` | text | **unique**, `~ '^[A-Za-z0-9]{1,30}$'` | letters + digits, ≤30; the user's public handle |
 | `is_agent` | boolean | not null, default false | hidden OCR Agent |
 | `created_time` | timestamptz | not null, default now() | |
 
@@ -211,6 +209,23 @@ Hierarchical rolling summarization (mechanics in the architecture doc §6). Fiel
 - **`chunk_memories`** is the append-only, `id`-ordered history; each row's `start_message_id`/`end_message_id` bound its message range.
 
 When `pending_tokens` crosses the configured threshold (or a summary is requested), the backend forms a new chunk over the pending messages, writes its `memory`, folds it into `global_memory`, and resets `pending_tokens`. An **on-demand summary** reads `global_memory` plus a fresh summary of messages after the newest chunk's `end_message_id` — never a full-history scan.
+
+---
+
+## Validation & integrity ownership
+
+The database is the **integrity backstop**, not the primary validator. Field-format UX validation lives in the Application layer (FluentValidation); the DB guarantees that bad data can never land regardless of the write path (user, MCP, n8n, or service role).
+
+| Concern | Owned by the DB via |
+|---|---|
+| `username` format (`^[A-Za-z0-9]{1,30}$`) and uniqueness | CHECK + UNIQUE |
+| `public_id` format (6 alphanumeric) and uniqueness | CHECK + UNIQUE |
+| `type`, `ocr_status` domains | CHECK |
+| `pending_tokens ≥ 0` | CHECK |
+| referential integrity | FK (+ cascade) |
+| per-row authorization | RLS (below) |
+
+Cosmetic text such as `conversations.display_name` (charset "letters, digits, comma, space") is validated only in Application — it is a display concern, not an integrity one, so no DB CHECK is added for it. The **Domain layer carries no validation** (no attributes, no throwing) — it is a pure model.
 
 ---
 

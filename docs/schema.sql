@@ -18,7 +18,6 @@ create table if not exists profiles (
     id            uuid primary key default gen_random_uuid(),
     username      text not null unique
                       check (username ~ '^[A-Za-z0-9]{1,30}$'),   -- letters+digits, <=30
-    display_name  text not null,
     is_agent      boolean not null default false,                 -- hidden OCR Agent
     created_time  timestamptz not null default now()
 );
@@ -174,11 +173,10 @@ create trigger messages_after_insert
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-    insert into public.profiles (id, username, display_name)
+    insert into public.profiles (id, username)
     values (
         new.id,
-        coalesce(new.raw_user_meta_data->>'username', 'user' || left(replace(new.id::text,'-',''), 12)),
-        coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1))
+        coalesce(new.raw_user_meta_data->>'username', 'user' || left(replace(new.id::text,'-',''), 12))
     )
     on conflict (id) do nothing;
     return new;
@@ -199,8 +197,8 @@ end $$;
 -- -----------------------------------------------------------------------------
 -- 5. SEED — the hidden system Agent (posts OCR replies)
 -- -----------------------------------------------------------------------------
-insert into profiles (id, username, display_name, is_agent)
-values ('00000000-0000-0000-0000-000000000001', 'aiagent', 'AI Agent', true)
+insert into profiles (id, username, is_agent)
+values ('00000000-0000-0000-0000-000000000001', 'aiagent', true)
 on conflict (id) do nothing;
 
 -- -----------------------------------------------------------------------------

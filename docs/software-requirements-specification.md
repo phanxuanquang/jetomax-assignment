@@ -121,7 +121,7 @@ flowchart LR
 Each feature: description, behavior, acceptance criteria, edge cases.
 
 ### F-1 · Registration & authentication
-**Behavior.** Sign-up and sign-in via Supabase Auth, which issues a JWT; a profile is created on first sign-up. Each user has a unique **Username** (letters + digits only, ≤30 chars) plus a display name. Every request carries the JWT.
+**Behavior.** Sign-up and sign-in via Supabase Auth, which issues a JWT; a profile is created on first sign-up. Each user is identified by a unique **Username** (letters + digits only, ≤30 chars); there is no separate display name. Every request carries the JWT.
 **Acceptance.** A new user can register with a valid, unique username and sign in; a profile exists; invalid or duplicate usernames are rejected; unauthenticated requests are rejected.
 **Edge cases.** Username with non-alphanumeric characters or >30 chars rejected; duplicate username rejected.
 
@@ -131,7 +131,7 @@ Each feature: description, behavior, acceptance criteria, edge cases.
 **Edge cases.** Messages from a member who later leaves remain in history.
 
 ### F-3 · Create & join conversations
-**Behavior.** A user **creates** a conversation by adding **1 or more** other participants (2 people = direct chat, more = group), becoming its owner. The backend auto-generates a unique 6-char `PublicId` and an initial `DisplayName` from the owner's and up to two other participants' usernames (e.g. `alice, bob`). A user **joins** an existing conversation by entering its exact `PublicId`.
+**Behavior.** A user **creates** a conversation by adding **1 or more** other participants (2 people = direct chat, more = group), becoming its owner. The backend auto-generates a unique 6-char `PublicId` and an initial `DisplayName` from the owner's and up to two other participants' usernames (e.g. `alice, bob`). A `DisplayName` may contain letters, digits, commas, and spaces. A user **joins** an existing conversation by entering its exact `PublicId`.
 **Acceptance.** Creating yields a conversation with a unique PublicId and generated name, and the creator can chat immediately; entering a valid PublicId of a joinable conversation adds the user and shows history + live messages.
 **Edge cases.** Creating with no other participant is rejected; joining with a wrong/nonexistent PublicId fails cleanly; joining a **frozen** or deleted conversation is rejected; joining one already joined is a no-op.
 

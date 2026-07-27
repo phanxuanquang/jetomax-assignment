@@ -196,6 +196,19 @@ public sealed class AllowedClientsAttribute(params Client[] allowed) : Attribute
 
 This satisfies the rule that a User cannot reach n8n-only endpoints and n8n cannot reach user-only endpoints.
 
+### 4.3 Validation & integrity
+
+**Two layers, not three.** Format validation is owned by **FluentValidation** in the Application layer (one validator per command, next to its slice); the **database** is the integrity backstop (CHECK, UNIQUE, FK, RLS). The **Domain layer performs no validation** — no attributes, no throwing — it is a pure model.
+
+| Rule kind | Primary | Backstop |
+|---|---|---|
+| Field format (length, charset, required, enum) | FluentValidation | DB CHECK for the integrity-critical ones (`username`, `public_id`, `type`, `ocr_status`) |
+| Uniqueness (`username`, `public_id`) | — | **DB UNIQUE** (only the DB avoids the check-then-insert race) |
+| Referential integrity | — | DB FK |
+| Stateful business rules (owner-only, frozen, readonly, ≥2 participants) | Application handler | RLS where it is a security boundary |
+
+The validator runs first in the MediatR pipeline (§4.1) and rejects bad input before it reaches the database; the DB catches anything that slips through or arrives via another client/service-role path. On a DB violation the API maps Postgres `23505` (unique) → 409 and `23514` (check) → 400 rather than surfacing a raw error. Cosmetic text (e.g. `conversation.DisplayName`, allowed charset letters/digits/comma/space) is validated only in Application — it is not an integrity concern, so it gets no DB CHECK.
+
 ---
 
 ## 5. Real-time design
