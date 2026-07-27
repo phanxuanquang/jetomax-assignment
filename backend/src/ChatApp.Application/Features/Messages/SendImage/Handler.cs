@@ -20,9 +20,10 @@ public sealed class Handler(
 
     /// <summary>
     /// Runs the single on-send vision pass synchronously (caption + text-detection) with a short
-    /// timeout; on failure or timeout it falls back to no caption and <see cref="OcrStatus.TextNotFound"/>
-    /// so the image still sends (F-5's edge case: AI failure never blocks the message). Then persists
-    /// the image message, accrues its caption's token count, enqueues for summarization, and broadcasts it.
+    /// timeout; on failure or timeout it falls back to no caption and <see cref="OcrStatus.NotRequested"/>
+    /// (assume text may be present and let a participant retry "Extract text" later) so the image still
+    /// sends (F-5's edge case: AI failure never blocks the message). Then persists the image message,
+    /// accrues its caption's token count, enqueues for summarization, and broadcasts it.
     /// </summary>
     public async Task<Result<MessageDto>> Handle(Command request, CancellationToken cancellationToken)
     {
@@ -69,7 +70,7 @@ public sealed class Handler(
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            return (null, OcrStatus.TextNotFound);
+            return (null, OcrStatus.NotRequested);
         }
     }
 }
