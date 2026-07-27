@@ -1,6 +1,6 @@
 using FluentValidation;
 
-namespace ChatApp.Application.Features.Conversations.AddParticipant;
+namespace ChatApp.Application.Features.Conversations.AddParticipants;
 
 /// <summary>Validates the shape of <see cref="Command"/>: a valid conversation id and at least one distinct, non-empty user id.</summary>
 public sealed class Validator : AbstractValidator<Command>

@@ -3,7 +3,7 @@ using ChatApp.Application.Common.Results;
 using ChatApp.Domain.Entities;
 using MediatR;
 
-namespace ChatApp.Application.Features.Conversations.AddParticipant;
+namespace ChatApp.Application.Features.Conversations.AddParticipants;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
 public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNotifier notifier)

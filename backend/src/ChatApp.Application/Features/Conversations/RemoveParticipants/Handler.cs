@@ -2,7 +2,7 @@ using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
 using MediatR;
 
-namespace ChatApp.Application.Features.Conversations.RemoveParticipant;
+namespace ChatApp.Application.Features.Conversations.RemoveParticipants;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
 public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNotifier notifier)
