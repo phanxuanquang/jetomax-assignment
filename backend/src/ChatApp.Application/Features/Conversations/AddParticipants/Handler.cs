@@ -41,7 +41,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
 
         if (validUserCount != toAdd.Count)
         {
-            return Result.Failure(Error.NotFound("user.not_found", "One or more users to add do not exist."));
+            return Result.Failure(Error.NotFound("user.not_found", "One or more users to add do not exist or are not humen."));
         }
 
         var existingCount = existingParticipantIds.Count;

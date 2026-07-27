@@ -43,7 +43,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
             return Result<ConversationDto>.Failure(Error.NotFound("user.not_found", "One or more participants do not exist."));
         }
 
-        var publicId = await GenerateUniquePublicIdAsync(db, cancellationToken);
+        var publicId = await GeneratePublicIdAsync(db, cancellationToken);
         if (publicId is null)
         {
             return Result<ConversationDto>.Failure(Error.Unexpected(
@@ -86,7 +86,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
         return string.Join(", ", names);
     }
 
-    private static async Task<string?> GenerateUniquePublicIdAsync(IAppDbContext db, CancellationToken cancellationToken)
+    private static async Task<string?> GeneratePublicIdAsync(IAppDbContext db, CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < MaxPublicIdAttempts; attempt++)
         {
