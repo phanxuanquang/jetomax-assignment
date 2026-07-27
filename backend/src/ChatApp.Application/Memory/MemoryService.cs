@@ -55,7 +55,7 @@ public sealed class MemoryService(IAppDbContext db, ISummaryService summaryServi
     /// after the last chunk's pointer — regardless of whether the pending-token threshold has been
     /// crossed. The fresh summary is never persisted as a chunk; it is always recomputed.
     /// </summary>
-    public async Task<OnDemandSummary> GetOnDemandSummaryAsync(Guid conversationId, CancellationToken cancellationToken)
+    public async Task<OnDemandSummary> GenerateSummaryAsync(Guid conversationId, CancellationToken cancellationToken)
     {
         var memory = await db.FirstOrDefaultAsync(db.ConversationMemories.Where(m => m.ConversationId == conversationId), cancellationToken);
         var globalMemory = memory?.GlobalMemory ?? string.Empty;

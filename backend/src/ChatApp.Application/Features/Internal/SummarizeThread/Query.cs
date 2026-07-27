@@ -1,7 +1,7 @@
 using ChatApp.Application.Common.Results;
 using MediatR;
 
-namespace ChatApp.Application.Features.Conversations.Summarize;
+namespace ChatApp.Application.Features.Internal.Summarize;
 
 /// <summary>
 /// Returns a conversation's thread summary (F-7): the pre-computed global memory plus a fresh

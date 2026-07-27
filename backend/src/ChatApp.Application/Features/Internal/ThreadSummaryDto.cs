@@ -1,4 +1,4 @@
-namespace ChatApp.Application.Features.Conversations;
+namespace ChatApp.Application.Features.Internal;
 
 /// <summary>A thread summary (§6): the rolling global memory plus a fresh summary of everything since the last checkpoint.</summary>
 /// <param name="GlobalMemory">The conversation's current evolving overall summary.</param>

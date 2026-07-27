@@ -1,6 +1,6 @@
 using FluentValidation;
 
-namespace ChatApp.Application.Features.Conversations.Summarize;
+namespace ChatApp.Application.Features.Internal.Summarize;
 
 /// <summary>Validates the shape of <see cref="Query"/>: a valid id.</summary>
 public sealed class Validator : AbstractValidator<Query>
