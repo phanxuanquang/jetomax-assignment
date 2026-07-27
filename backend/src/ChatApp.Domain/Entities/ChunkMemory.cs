@@ -18,14 +18,14 @@ public sealed class ChunkMemory
     public Guid ConversationId { get; init; }
 
     /// <summary>
-    /// First message covered by this chunk. Null if that message was later removed.
+    /// First message covered by this chunk.
     /// </summary>
-    public Guid? StartMessageId { get; init; }
+    public Guid StartMessageId { get; init; }
 
     /// <summary>
-    /// Last message covered by this chunk; the rolling pointer. Null if that message was later removed.
+    /// Last message covered by this chunk; the rolling pointer.
     /// </summary>
-    public Guid? EndMessageId { get; init; }
+    public Guid EndMessageId { get; init; }
 
     /// <summary>
     /// The chunk's summary text.

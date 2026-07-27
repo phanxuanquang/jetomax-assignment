@@ -11,6 +11,8 @@ public sealed class ConversationMemory
     /// </summary>
     public Guid ConversationId { get; init; }
 
+    public Guid AssociatedEndMessageId { get; set; }
+
     /// <summary>
     /// The evolving overall summary, folded in each time a chunk is produced. Defaults to empty for a brand-new conversation.
     /// </summary>
@@ -30,4 +32,11 @@ public sealed class ConversationMemory
     /// The conversation this memory belongs to.
     /// </summary>
     public Conversation? Conversation { get; set; }
+
+    public Message? AssociatedEndMessage { get; set; }
+
+    public ConversationMemory(Guid conversationId)
+    {
+        ConversationId = conversationId;
+    }
 }
