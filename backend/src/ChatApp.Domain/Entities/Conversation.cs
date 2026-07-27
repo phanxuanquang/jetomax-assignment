@@ -22,7 +22,7 @@ public sealed class Conversation
     /// cosmetic field validated only by FluentValidation (Application) — it is not an integrity
     /// concern, so Domain places no constraint on it.
     /// </summary>
-    public required string DisplayName { get; init; }
+    public required string DisplayName { get; set; }
 
     /// <summary>
     /// The current owner's user id. Null means the conversation is frozen: no new joins are allowed, but existing participants may still chat or leave.
