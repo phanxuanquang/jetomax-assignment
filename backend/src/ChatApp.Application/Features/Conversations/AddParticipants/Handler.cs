@@ -50,7 +50,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNot
             conversation.IsReadonly = false;
         }
 
-        db.AddRange(toAdd.Select(id => new Participant { ConversationId = conversation.Id, UserId = id }));
+        db.AddRange(toAdd.Select(id => new Participant(conversation.Id, id)));
         await db.SaveChangesAsync(cancellationToken);
 
         foreach (var userId in toAdd)

@@ -51,7 +51,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IChatNot
                 conversation.IsReadonly = false;
             }
 
-            db.Add(new Participant { ConversationId = conversation.Id, UserId = callerId });
+            db.Add(new Participant(conversation.Id, callerId));
             await db.SaveChangesAsync(cancellationToken);
             await notifier.NotifyMemberChangedAsync(conversation.Id, callerId, MemberChangeAction.Joined, cancellationToken);
 

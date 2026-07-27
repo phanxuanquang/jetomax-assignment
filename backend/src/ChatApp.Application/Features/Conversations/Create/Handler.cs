@@ -59,21 +59,10 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
         };
 
         db.Add(conversation);
-        db.Add(new Participant
-        {
-            ConversationId = conversation.Id,
-            UserId = ownerId
-        });
-        db.AddRange(otherIds.Select(id => new Participant
-        {
-            ConversationId = conversation.Id,
-            UserId = id
-        }));
+        db.Add(new Participant(conversation.Id, ownerId));
+        db.AddRange(otherIds.Select(id => new Participant(conversation.Id, id)));
 
-        db.Add(new ConversationMemory
-        {
-            ConversationId = conversation.Id
-        });
+        db.Add(new ConversationMemory(conversation.Id));
 
         await db.SaveChangesAsync(cancellationToken);
 
