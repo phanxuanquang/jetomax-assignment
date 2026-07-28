@@ -11,8 +11,12 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
     /// <summary>
     /// Removes the caller's participant row (mirroring the DB's 1↔2 readonly auto-set boundary),
     /// and — only when the caller is the owner — soft-deletes or freezes the conversation per
-    /// <see cref="Command.Mode"/>. Soft-delete retains all rows, including the owner's own
-    /// participant row, so it returns without touching membership.
+    /// <see cref="Command.Mode"/>. On delete (decision B-5), every participant is notified in
+    /// realtime — via <see cref="IConversationNotifier.NotifyMemberChangedAsync"/> with
+    /// <see cref="MemberChangeAction.Left"/>, the same event the API already documents for realtime
+    /// membership changes — and the owner's own participant row is removed, same as any other leave;
+    /// every other participant's row is retained (soft-delete keeps rows, per the no-hard-delete
+    /// rule; only the owner's leave-style removal applies).
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
@@ -50,8 +54,19 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
 
             if (mode == LeaveMode.Delete)
             {
+                var allParticipantIds = await db.ToListAsync(
+                    db.Participants.Where(p => p.ConversationId == conversation.Id).Select(p => p.UserId),
+                    cancellationToken);
+
                 conversation.IsDeleted = true;
+                db.Remove(participant);
                 await db.SaveChangesAsync(cancellationToken);
+
+                foreach (var participantId in allParticipantIds)
+                {
+                    await notifier.NotifyMemberChangedAsync(conversation.Id, participantId, MemberChangeAction.Left, cancellationToken);
+                }
+
                 return Result.Success();
             }
 
