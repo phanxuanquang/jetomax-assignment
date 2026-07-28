@@ -20,7 +20,7 @@ public abstract class Message
     public Guid ConversationId { get; init; }
 
     /// <summary>
-    /// The sender's user id. May be the hidden AI Agent's id (OCR replies).
+    /// The sender's user id. May be the hidden AI Agent's id.
     /// </summary>
     public Guid UserId { get; init; }
 
@@ -34,7 +34,7 @@ public abstract class Message
     public abstract MessageType Type { get; }
 
     /// <summary>
-    /// The message this one replies to, e.g. an AI Agent's OCR transcription replying to the source image. Null for ordinary messages.
+    /// The message this one replies to. Null for ordinary messages.
     /// </summary>
     public Guid? RepliesToMessageId { get; set; }
 
