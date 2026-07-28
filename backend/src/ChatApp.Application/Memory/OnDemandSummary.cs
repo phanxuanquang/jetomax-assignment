@@ -1,6 +1,10 @@
 namespace ChatApp.Application.Memory;
 
-/// <summary>The result of an on-demand summary request (§6): the rolling global memory plus a fresh, unpersisted summary of everything since the last checkpoint.</summary>
+/// <summary>
+/// The two unfolded parts of an on-demand summary (§6), before <see cref="ConversationMemoryService"/>
+/// combines them into the single summary it actually returns. Internal to the memory pipeline — no
+/// other caller needs the parts separately.
+/// </summary>
 /// <param name="GlobalMemory">The conversation's current evolving overall summary.</param>
-/// <param name="RecentSummary">A fresh summary of messages after the last chunk's pointer; empty if there are none.</param>
-public sealed record OnDemandSummary(string GlobalMemory, string RecentSummary);
+/// <param name="RecentSummary">A fresh, unpersisted summary of messages after the last chunk's pointer; empty if there are none.</param>
+internal sealed record OnDemandSummary(string GlobalMemory, string RecentSummary);

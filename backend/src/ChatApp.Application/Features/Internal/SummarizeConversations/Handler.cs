@@ -1,51 +1,60 @@
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
+using ChatApp.Application.Memory;
 using MediatR;
 
 namespace ChatApp.Application.Features.Internal.SummarizeConversations;
 
-public sealed class Handler(IAppDbContext db, IGenerativeAiService generativeAiService, IMediator mediator)
+/// <summary>
+/// Handles <see cref="Query"/>. Produces n8n's one 24-hour roll-up digest (§6.2) by reading each
+/// active conversation's own on-demand summary via <see cref="ConversationMemoryService"/> directly
+/// — never through <c>IMediator</c> — then folding all of them into a single overall digest. A pure
+/// read, like the per-thread summary it reuses: nothing here mutates stored memory.
+/// </summary>
+public sealed class Handler(IAppDbContext db, ConversationMemoryService memoryService, IGenerativeAiService generativeAiService)
     : IRequestHandler<Query, Result<string>>
 {
+    /// <summary>Summarizes every conversation active within the last <see cref="Query.HoursAgo"/> hours and folds them into one digest.</summary>
     public async Task<Result<string>> Handle(Query request, CancellationToken cancellationToken)
     {
-        var timestamp = DateTime.UtcNow.AddHours(request.HoursAgo);
+        var since = DateTime.UtcNow.AddHours(-request.HoursAgo);
 
-        var conversationIds = await db.ToListAsync(
-            db.Conversations.Where(c => c.Messages.Any(m => m.SentAt >= timestamp)).Select(c => c.Id),
+        var conversations = await db.ToListAsync(
+            db.Conversations
+                .Where(c => c.Messages.Any(m => m.SentAt >= since))
+                .OrderByDescending(c => c.LastMessageTime)
+                .Select(c => new { c.Id, c.DisplayName }),
             cancellationToken);
 
-        if (conversationIds.Count == 0)
+        if (conversations.Count == 0)
         {
             return Result<string>.Failure(Error.NotFound("conversation.not_found", $"No conversations active within the last {request.HoursAgo} hours."));
         }
 
-        var forceUpdateTasks = new List<Task>();
-
-        foreach (var conversationId in conversationIds)
+        var threadSummaries = new List<(string DisplayName, string Summary)>();
+        foreach (var conversation in conversations)
         {
-            forceUpdateTasks.Add(mediator.Send(new ForceUpdateConversationMemory.Query(conversationId), cancellationToken));
+            var summary = await memoryService.GetOnDemandSummaryAsync(conversation.Id, cancellationToken);
+            threadSummaries.Add((conversation.DisplayName, summary));
         }
 
-        await Task.WhenAll(forceUpdateTasks);
+        var digest = await generativeAiService.GenerateContentAsync<string>(
+            ComposeDigestPrompt(request.HoursAgo, threadSummaries),
+            cancellationToken: cancellationToken);
 
-        var chunkMemories = await db.ToListAsync(
-            db.Conversations
-                .Where(c => conversationIds.Contains(c.Id) && c.ChunkMemories.Any())
-                .OrderBy(c => c.LastMessageTime)
-                .Select(c => new
-                {
-                    Meta = new
-                    {
-                        c.DisplayName,
-                        c.Memory!.GlobalMemory,
-                    },
-                    MemoryChunks = c.ChunkMemories.Select(c => c.Memory)
-                }),
-            cancellationToken);
+        return Result<string>.Success(digest);
+    }
 
-        var summarization = await generativeAiService.GenerateContentAsync<string>("Will add the prompt here", cancellationToken: cancellationToken);
+    private static string ComposeDigestPrompt(double hoursAgo, IReadOnlyList<(string DisplayName, string Summary)> threadSummaries)
+    {
+        var threads = string.Join("\n\n", threadSummaries.Select(t => $"### {t.DisplayName}\n{t.Summary}"));
+        return $"""
+            Produce one overall summary of chat activity across all conversations active in the
+            last {hoursAgo} hours, based on each conversation's own summary below. Group related
+            activity, keep it concise, and preserve concrete facts: names, decisions, numbers, and
+            negations (things explicitly ruled out or denied).
 
-        return Result<string>.Success(summarization);
+            {threads}
+            """;
     }
 }
