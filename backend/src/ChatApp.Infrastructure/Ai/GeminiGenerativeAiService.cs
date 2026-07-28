@@ -1,9 +1,9 @@
-using System.Text.Json;
 using ChatApp.Application.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using Microsoft.SemanticKernel.Connectors.Google;
+using System.Text.Json;
 
 namespace ChatApp.Infrastructure.Ai;
 
