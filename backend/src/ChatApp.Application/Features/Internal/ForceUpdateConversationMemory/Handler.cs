@@ -78,7 +78,6 @@ public sealed class Handler(IAppDbContext db, IGenerativeAiService generativeAiS
              cancellationToken);
 
         currentConversationMemory!.GlobalMemory = updatedGlobalMemoryContent;
-        currentConversationMemory!.AssociatedEndMessageId = latestMessage.Id;
         currentConversationMemory!.LastUpdatedTime = DateTime.UtcNow;
 
         await db.SaveChangesAsync(cancellationToken);

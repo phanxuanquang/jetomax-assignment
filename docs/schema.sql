@@ -79,8 +79,8 @@ create table if not exists conversation_memory (
 create table if not exists chunk_memories (
     id               bigint generated always as identity primary key,
     conversation_id  uuid not null references conversations(id) on delete cascade,
-    start_message_id uuid references messages(id) on delete set null,
-    end_message_id   uuid references messages(id) on delete set null,
+    start_message_id uuid references messages(id) on delete restrict,
+    end_message_id   uuid references messages(id) on delete restrict,
     memory           text not null,
     created_time     timestamptz not null default now()
 );
@@ -98,25 +98,14 @@ create index if not exists idx_conversations_last   on conversations (last_messa
 -- 3. TRIGGERS
 -- -----------------------------------------------------------------------------
 
--- 3a. On conversation creation: add the owner as a participant and create the
---     1:1 memory row. SECURITY DEFINER so bookkeeping bypasses RLS.
-create or replace function trg_on_conversation_created()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-    if new.owner_id is not null then
-        insert into participants (conversation_id, user_id)
-            values (new.id, new.owner_id) on conflict do nothing;
-    end if;
-    insert into conversation_memory (conversation_id)
-        values (new.id) on conflict do nothing;
-    return new;
-end;
-$$;
-
-drop trigger if exists conversations_after_insert on conversations;
-create trigger conversations_after_insert
-    after insert on conversations
-    for each row execute function trg_on_conversation_created();
+-- NOTE: create-time bookkeeping (adding the owner as a participant and creating
+-- the 1:1 conversation_memory row) is owned by the APPLICATION layer, not a
+-- trigger (decision A-3). Doing it in the handler keeps it testable without a
+-- DB and visible in code; a trigger would add zero defensive value since only
+-- the app ever creates a conversation. Any previously-defined
+-- conversations_after_insert trigger/function is dropped for idempotency:
+drop trigger  if exists conversations_after_insert on conversations;
+drop function if exists trg_on_conversation_created();
 
 -- 3b. Auto-manage is_readonly at the 1<->2 participant boundary.
 --     -> 1 participant: set readonly.   -> back to 2: clear readonly.

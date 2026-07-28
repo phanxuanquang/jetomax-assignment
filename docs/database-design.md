@@ -92,7 +92,7 @@ Eight tables: users, conversations, participants, a table-per-type message trio,
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | uuid | PK | |
-| `public_id` | text | **unique**, `~ '^[A-Za-z0-9]{6}$'` | 6 chars, case-sensitive, backend-generated; used to join |
+| `public_id` | text | **unique**, `~ '^[A-Za-z0-9]{6}$'` | 6 chars, case-sensitive; used to join. Generated with a **CSPRNG** (`RandomNumberGenerator`), retrying on the rare `23505` unique collision — not a predictable PRNG, since the code is an access grant |
 | `display_name` | text | not null | auto-generated at creation, owner-editable |
 | `owner_id` | uuid | FK → profiles, on delete set null | **nullable & transferable**; `NULL` = **frozen** |
 | `is_deleted` | boolean | not null, default false | soft delete |
@@ -148,7 +148,7 @@ The Agent is **not** a participant, so participant counts are always human.
 |---|---|---|---|
 | `id` | bigint | PK, generated always as identity | also the chunk order |
 | `conversation_id` | uuid | FK → conversations, on delete cascade | |
-| `start_message_id` / `end_message_id` | uuid | FK → messages, on delete set null | the chunk's message range |
+| `start_message_id` / `end_message_id` | uuid | FK → messages, on delete **restrict** | chunk's message range; restrict + no-hard-delete keeps these non-null Domain properties safe |
 | `memory` | text | not null | chunk summary |
 | `created_time` | timestamptz | not null, default now() | |
 
@@ -172,7 +172,9 @@ The rolling **pointer** is implicit: the newest chunk's `end_message_id` marks w
 
 ## Relationships & cascade
 
-FKs cascade from `conversations` to `participants`, `messages`, `conversation_memory`, and `chunk_memories`; `messages` cascade to `text_messages` / `image_messages`. Normal deletion is **soft** (`is_deleted`), so cascade is a defensive guarantee for the rare hard delete. Self-reference (`replies_to_message_id`) and memory pointers use `on delete set null`.
+**No table is ever hard-deleted for messages, conversations, or users** (decision C-2). Conversations are soft-deleted via `is_deleted`; messages and users are never removed. The chunk-boundary FKs therefore use **`on delete restrict`** — the DB refuses to remove a message that a `chunk_memories` row points at, turning the "no hard delete" promise into an enforced invariant while letting `ChunkMemory.Start/EndMessageId` stay non-nullable in the Domain.
+
+**Scope of the rule (decision Q-C):** "no hard delete" covers **messages, conversations, users**. **Participants are the exception** — leaving or being removed **deletes the `participants` row**, and the readonly-boundary triggers fire on that `DELETE`. This is safe because nothing references a participant row (in particular, `chunk_memories` references messages, never participants). The remaining `on delete cascade` actions from `conversations`/`profiles` never fire under soft-delete; they stay only as a defensive guarantee.
 
 ---
 
@@ -191,13 +193,12 @@ FKs cascade from `conversations` to `participants`, `messages`, `conversation_me
 
 | Trigger | Fires | Guarantees |
 |---|---|---|
-| `conversations_after_insert` | after insert on conversations | owner auto-added as participant + 1:1 memory row created (SECURITY DEFINER) |
 | `participants_after_insert` | after insert on participants | clears `is_readonly` when count reaches 2 |
 | `participants_after_delete` | after delete on participants | sets `is_readonly` when count drops to ≤1 |
 | `messages_after_insert` | after insert on messages | updates `last_message_time` |
 | `on_auth_user_created` | after insert on auth.users | provisions a profile (Supabase only) |
 
-The Agent is seeded once (`username = aiagent`, `is_agent = true`). **Note:** the previous immutable-`owner_id` trigger was removed — ownership is now transferable.
+Create-time bookkeeping (owner-as-participant + the 1:1 `conversation_memory` row) is done by the **Application layer**, not a trigger (decision A-3) — testable without a DB and visible in code. The Agent is seeded once (`username = aiagent`, `is_agent = true`). **Note:** the previous immutable-`owner_id` trigger was removed — ownership is now transferable.
 
 ---
 
@@ -205,10 +206,10 @@ The Agent is seeded once (`username = aiagent`, `is_agent = true`). **Note:** th
 
 Hierarchical rolling summarization (mechanics in the architecture doc §6). Field mapping to the spec: `GlobalMemory → global_memory`, `PendingTokens → pending_tokens`, chunk `Memory → memory` with `StartMessageId`/`EndMessageId`.
 
-- **`conversation_memory`** holds the live state: `global_memory` (evolving overall recap) and `pending_tokens` (accrued since the last chunk; the backend increments this per message — an image message counts the tokens of its `caption`).
+- **`conversation_memory`** holds the live state: `global_memory` (evolving overall recap) and `pending_tokens` (accrued since the last chunk; a **detached, send-triggered task** increments this per message via a **remote** `IGenerativeAiService.CountTokensAsync` call — an image message counts the tokens of its `caption`). The count runs off the send response path (architecture §6).
 - **`chunk_memories`** is the append-only, `id`-ordered history; each row's `start_message_id`/`end_message_id` bound its message range.
 
-When `pending_tokens` crosses the configured threshold (or a summary is requested), the backend forms a new chunk over the pending messages, writes its `memory`, folds it into `global_memory`, and resets `pending_tokens`. An **on-demand summary** reads `global_memory` plus a fresh summary of messages after the newest chunk's `end_message_id` — never a full-history scan.
+When `pending_tokens` crosses the configured threshold, the backend forms a new chunk over the pending messages, writes its `memory`, folds it into `global_memory`, and resets `pending_tokens`. An **on-demand summary is a pure read** (decision C-3): it returns `global_memory` plus a freshly-computed summary of messages after the newest chunk's `end_message_id`, and **never mutates stored memory or incurs a write** — never a full-history scan.
 
 ---
 
@@ -252,6 +253,11 @@ Policy summary (`auth.uid()` = current user):
 | conversation_memory / chunk_memories | `is_participant(conversation_id)` | service role | service role | service role |
 
 Background writes (memory worker) and Agent OCR/caption writes run with the **service role**, which bypasses RLS by design.
+
+> **What RLS actually protects here.** All table access from the app goes through the .NET backend, and that backend connects with a **service role that bypasses RLS** — so these policies are *not* a second check on backend queries. They exist because a Supabase project also exposes **PostgREST publicly**, and the **anon key ships in the frontend**: without RLS, anyone holding that key could read every table directly. Two practical rules follow:
+>
+> - Authorization for backend traffic is enforced **entirely** in the Application handlers (membership, owner-only, readonly). Do not treat RLS as a safety net for it.
+> - If the backend is ever pointed at Postgres with a role that RLS *does* apply to, `auth.uid()` is `NULL` for that session, every policy evaluates false, and **queries return zero rows silently** instead of erroring. Check the connection role first when data "disappears".
 
 ---
 
