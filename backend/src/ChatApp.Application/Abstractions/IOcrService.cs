@@ -30,6 +30,11 @@ public interface IOcrService
     /// reuse the scoped instances that were injected into the caller, since those are disposed once
     /// the caller's scope (the original HTTP request) ends.
     /// </para>
+    /// <para>
+    /// On failure or timeout while in <c>Processing</c> (decision B-4), implementations must reset
+    /// <c>OcrStatus</c> back to <c>NotRequested</c> rather than leaving it stuck — the lock acquired by
+    /// <see cref="TryStartAsync"/> is transitional, not permanent, so any participant can retry.
+    /// </para>
     /// </summary>
     Task ProcessAsync(Guid imageMessageId, CancellationToken cancellationToken);
 }
