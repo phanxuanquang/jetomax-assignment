@@ -168,7 +168,7 @@ To avoid over-engineering, only **one** pipeline behavior is added — `Validati
 
 Three client types call the backend; not every client may call every endpoint. Client identity is resolved from the authentication scheme and expressed as a claim, then checked by a single attribute.
 
-> **Layer ownership.** The `Client` enum and this whole check live in **`ChatApp.Api`**. The Application layer is deliberately unaware of which client called it — `IConversationAccess` exposes only the caller's user identity (plus the owner/readonly access guards). Consequence to respect: an Application handler must **never infer a client type**, in particular not by treating a failed identity lookup as "this must be n8n". `[AllowedClients]` is the single gate; handlers that need no user simply do not ask for one.
+> **Layer ownership.** The `Client` enum and this whole check live in **`ChatApp.Api`**. The Application layer is deliberately unaware of which client called it — `IConversationAccess` exposes the caller's user identity as a synchronous `Guid? UserId` (plus the owner/readonly access guards, and a `GetCurrentUserAsync()` used only by `Create`, which needs the owner's `Username` for display-name generation). Consequence to respect: an Application handler must **never infer a client type**, in particular not by treating a failed identity lookup as "this must be n8n". `[AllowedClients]` is the single gate; handlers that need no user simply do not ask for one.
 
 ```csharp
 public enum Client { App, Mcp, N8n }   // declared in ChatApp.Api — Application is unaware of it
@@ -378,10 +378,14 @@ Auth: the **App** carries the Supabase JWT (`Authorization: Bearer <token>` / Si
 | `NewMessage` | message | New message (user or Agent) |
 | `OcrStarted` | `messageId` | Disable "Extract text" for all |
 | `OcrDone` | `messageId` | OCR finished (reply already broadcast) |
-| `MemberChanged` | `conversationId`, `userId`, `action` | Participant added/removed/left |
+| `MemberChanged` | `conversationId`, `userId`, `action` (`Added` \| `Left`) | A participant joined, or left / was removed |
 | `DigestPublished` | digest content, date | The n8n daily digest was published (not conversation-scoped) |
 
 The Application-side port for these broadcasts is **`IConversationNotifier`**.
+
+**Conversation delete is signalled through `MemberChanged(Left)`, not a dedicated event** (decision, ship-oriented). When an owner deletes a conversation, the backend soft-deletes it (`is_deleted = true`) and broadcasts `MemberChanged(action = Left)` to **every** participant. There is deliberately no `ConversationDeleted`/`ConversationClosed` event — reusing the existing vocabulary keeps the notifier port surface unchanged.
+
+Client contract that this relies on: a client treats **`MemberChanged(Left)` where `userId` is its own** as "this conversation is gone from my list" and removes it from the sidebar — the same reaction it needs for being individually removed. It must not assume `Left` only means "someone else left." (Only the owner's own `participants` row is physically removed on delete; other rows are retained under soft-delete, so the signal, not the row's presence, is the source of truth for the UI.)
 
 ### 9.2 REST
 
@@ -455,7 +459,7 @@ Arrows are compile-time references. **`Application` never references `Infrastruc
 | Project | Role | Change it when… |
 |---|---|---|
 | **Domain** | Entities, enums, invariant guards; zero dependencies | a field/entity or business invariant changes |
-| **Application** | Vertical-slice use cases (MediatR) + **ports** (`IAppDbContext`, `IConversationNotifier`, `IStorageClient`, `IOcrService`, `IGenerativeAiService`, `IConversationAccess`; AI-port set being consolidated — see open question) | you add a use case or change business flow |
+| **Application** | Vertical-slice use cases (MediatR) + **ports** (`IAppDbContext`, `IConversationNotifier`, `IStorageClient`, `IOcrService`, `IGenerativeAiService`, `IConversationAccess`) | you add a use case or change business flow |
 | **Infrastructure** | **Adapters**: EF Core/Npgsql, Supabase Storage, SK+Gemini, tokenizer, memory worker plumbing | you swap DB / storage / AI provider |
 | **Api** | Host: controllers, SignalR Hub, `[AllowedClients]`, DI, background service | you change routes, realtime, or client auth |
 

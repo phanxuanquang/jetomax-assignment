@@ -63,7 +63,7 @@ Docs: https://supabase.com/docs/guides/local-development
 3. **Project Settings → API → JWT Settings**: copy the **JWT secret** (used by the backend to validate tokens).
 
 ### Storage bucket (both options)
-Create a bucket named **`images`** for chat images (Studio → Storage → New bucket). Keep it private; the backend issues signed URLs. Docs: https://supabase.com/docs/guides/storage
+Create a bucket named **`images`** for chat images (Studio → Storage → New bucket). Keep it private. **The client (frontend) uploads images directly and issues its own signed URLs** via the Supabase client — the backend never streams image bytes on the message path. The backend's `IStorageClient` has a single job: **download an object's bytes with the service-role key** so the Gemini vision call (caption / OCR) can read a private image without depending on a client-supplied signed URL that may have expired. Docs: https://supabase.com/docs/guides/storage
 
 ### Auth (both options)
 Enable **Email** sign-in (Studio → Authentication → Providers). The user's `username` is passed in sign-up metadata and copied into `profiles` by the `handle_new_user` trigger in `schema.sql`. Docs: https://supabase.com/docs/guides/auth
@@ -101,12 +101,15 @@ dotnet user-secrets set "Supabase:Url"            "<API URL>"
 dotnet user-secrets set "Supabase:ServiceRoleKey" "<service_role key>"
 dotnet user-secrets set "Supabase:JwtSecret"      "<JWT secret>"
 dotnet user-secrets set "Supabase:StorageBucket"  "images"
+dotnet user-secrets set "ConnectionStrings:Postgres" "<Postgres connection string — see note below>"
 dotnet user-secrets set "Gemini:ApiKey"           "<google ai studio key>"
 dotnet user-secrets set "Gemini:Model"            "gemini-2.5-flash"
 dotnet user-secrets set "Clients:McpKey"          "<random secret for MCP client>"
 dotnet user-secrets set "Clients:N8nKey"          "<random secret for n8n client>"
 dotnet user-secrets set "Memory:TokenThreshold"   "1500"
 ```
+
+> **`ConnectionStrings:Postgres` is a *different credential* from `Supabase:ServiceRoleKey` — do not confuse them.** `ServiceRoleKey` is a **JWT**, used as a Bearer token for Supabase's REST APIs (Storage, PostgREST). EF Core's `AppDbContext` connects to Postgres directly via Npgsql, which needs a **real Postgres role and password** — get this from Supabase **Project Settings → Database → Connection string** (local CLI: printed by `supabase status`). Use the `postgres` role or the `service_role` DB role (both have `BYPASSRLS`); using the JWT as a password will simply fail to authenticate. This is also the role that makes §11's RLS-bypass guarantee true — connecting with an RLS-subject role instead makes `auth.uid()` NULL and every query returns zero rows silently.
 
 Run:
 ```bash
@@ -163,7 +166,8 @@ If all six pass, the environment is correctly wired.
 | Key | Meaning |
 |---|---|
 | `Supabase:Url` | Supabase API URL |
-| `Supabase:ServiceRoleKey` | Service role key (server-only; bypasses RLS for Agent/memory writes) |
+| `Supabase:ServiceRoleKey` | Service role key (server-only). The backend **must** use a role that bypasses RLS — with an RLS-subject role, `auth.uid()` is `NULL` and every query returns zero rows silently |
+| `ConnectionStrings:Postgres` | The **actual Postgres connection string** (Project Settings → Database), used by `AppDbContext`/Npgsql. Not the same credential as `ServiceRoleKey` — that's a JWT for REST APIs, not a DB password |
 | `Supabase:JwtSecret` | Secret to validate user JWTs |
 | `Supabase:StorageBucket` | `images` |
 | `Gemini:ApiKey` / `Gemini:Model` | Google AI Studio key / `gemini-2.5-flash` |
