@@ -113,13 +113,11 @@ flowchart TB
     end
     Med(["MediatR · ISender.Send"])
     subgraph A["Application — MediatR handlers (one per use case)"]
-        Cmd["Commands: SendMessage, CreateGroup,<br/>JoinGroup, TriggerOcr, ..."]
-        Qry["Queries: GetConversations, GetMessages,<br/>SummarizeThread"]
+        Cmd["Commands: Send, SendImage, Create,<br/>Join, OcrImageMessage, ..."]
+        Qry["Queries: GetActiveConversations, Get,<br/>SummarizeConversation"]
     end
-    subgraph AI["AI layer — Semantic Kernel"]
-        Kern["Kernel (DI singleton)"]
-        Vis["IVisionService"]
-        Sum["ISummaryService"]
+    subgraph AI["AI layer"]
+        Gen["IGenerativeAiService<br/>(text · image · countTokens)"]
     end
     subgraph D["Data"]
         Ef["EF Core + Npgsql → Postgres"]
@@ -138,25 +136,42 @@ Every use case is a MediatR **command** (write) or **query** (read) with exactly
 
 | Use case (request) | Kind | Invoked by |
 |---|---|---|
-| `SendMessageCommand`, `SendImageCommand` | command | SignalR Hub |
-| `CreateConversationCommand`, `JoinConversationCommand` (by `public_id`) | command | REST |
-| `AddParticipantCommand`, `RemoveParticipantCommand`, `LeaveConversationCommand` (`delete`\|`freeze`) | command | REST |
-| `RenameConversationCommand`, `SetReadonlyCommand`, `TransferOwnershipCommand` | command | REST |
-| `TriggerOcrCommand` | command | REST |
-| `GetConversationsQuery` (optional search term) | query | REST, MCP |
-| `GetMessagesQuery` | query | REST |
-| `SummarizeThreadQuery` | query | REST, MCP, n8n |
+| `Messages.Send`, `Messages.SendImage` | command | SignalR Hub |
+| `Conversations.Create`, `Conversations.Join` (by `public_id`) | command | REST |
+| `Conversations.AddParticipants`, `Conversations.RemoveParticipants` (**batch**, all-or-nothing), `Conversations.Leave` (`delete`\|`freeze`) | command | REST |
+| `Conversations.Rename`, `Conversations.SetReadonly`, `Conversations.TransferOwnership` | command | REST |
+| `Messages.OcrImageMessage` (OCR trigger) | command | REST |
+| `Conversations.GetActiveConversations` (optional search term; empty ⇒ all) | query | REST, MCP |
+| `Messages.Get` (paginated) | query | REST |
+| `Internal.SummarizeConversation` (single thread) | query | REST, MCP, n8n |
+| `Internal.GetAllConversations`, `Internal.SummarizeConversations` (24 h roll-up), `Internal.PublishDigest` | query/command | n8n |
+
+> **`Internal` is a code namespace, not an access boundary** (decision B-1): `SummarizeConversation` lives there but is reachable by App / Mcp / N8n; only `GetAllConversations`, `SummarizeConversations` and `PublishDigest` are n8n-only. Access is decided per-endpoint by `[AllowedClients]` (§4.2), not by the folder name.
+
+Slices are named by namespace (`Features/<Area>/<UseCase>/{Command|Query, Handler, Validator}`), so the type names are short and repeated across folders. Api controllers disambiguate with `using` aliases — record this as a team convention.
+
+Registration lives in `Application/DependencyInjection.cs` as `AddApplication()`, which calls `AddMediatR(RegisterServicesFromAssembly + AddOpenBehavior × 2)` and `AddValidatorsFromAssembly`. Without it nothing in this layer is resolvable from Api.
+
+> **Two rules that keep the dispatcher from becoming a framework.**
+> - **A handler must not inject `IMediator`.** Logic shared between slices belongs in a plain service called directly (this is how the memory-update logic must be shared instead of one summary handler dispatching another). Nested dispatch re-runs the whole pipeline per inner call, couples slices to each other's request contracts, and invites the scope bug below.
+> - **Anything fired detached must open its own DI scope.** A request-scoped `IAppDbContext` is disposed when the request ends, and `DbContext` is not thread-safe — so both fire-and-forget work (OCR transcription) and any parallel fan-out must resolve their own scope per unit of work, never reuse the caller's.
 
 To avoid over-engineering, only **one** pipeline behavior is added — `ValidationBehavior` ([FluentValidation](https://docs.fluentvalidation.net/)) — plus a lightweight logging behavior. No planners, no CQRS read/write DB split, no event sourcing; commands and queries share the same Postgres. MediatR here is a dispatcher, not a framework.
 
-> **Licensing note (read before adding the NuGet package).** [MediatR](https://github.com/jbogard/MediatR) **v13.0+ is commercial** (dual-license under [Lucky Penny](https://mediatr.io/)); a **free Community edition** covers non-production use and companies under $5M revenue — a home-test project qualifies. Versions **≤ v12 remain MIT**. If you prefer to avoid the license entirely, use a free drop-in such as the source-generated [`Mediator`](https://github.com/martinothamar/Mediator) or [`FreeMediator`](https://www.nuget.org/packages/FreeMediator). The design below is package-agnostic; any of these works with the same slice structure.
+> **Licensing note (read before adding the NuGet package).** [MediatR](https://github.com/LuckyPennySoftware/MediatR) **v13.0+ is commercial** (dual-license under [Lucky Penny](https://mediatr.io/)); a **free Community edition** covers non-production use and companies under $5M revenue — a home-test project qualifies. Versions **≤ v12 remain MIT**. Free drop-ins: source-generated [`Mediator`](https://github.com/martinothamar/Mediator) or [`FreeMediator`](https://www.nuget.org/packages/FreeMediator). The design is package-agnostic.
+>
+> Two practical consequences of choosing MediatR v14, both worth handling explicitly:
+> - **Without a license key it still runs** (no runtime limits), but it **logs a licensing warning on every startup**. Register a free Community key (`cfg.LicenseKey`, or the `MEDIATR_LICENSE_KEY` environment variable), or silence it with `builder.Logging.AddFilter("LuckyPennySoftware.MediatR.License", LogLevel.None)`.
+> - It pulls the `Microsoft.IdentityModel.*` JWT stack into Application transitively, purely to validate that key. Nothing in the business logic uses it. `LoggingBehavior` also gets `ILogger<T>` only transitively through MediatR — add an **explicit** `PackageReference` for `Microsoft.Extensions.Logging.Abstractions` so the logging behavior does not depend on the mediator choice.
 
 ### 4.2 Client access control
 
 Three client types call the backend; not every client may call every endpoint. Client identity is resolved from the authentication scheme and expressed as a claim, then checked by a single attribute.
 
+> **Layer ownership.** The `Client` enum and this whole check live in **`ChatApp.Api`**. The Application layer is deliberately unaware of which client called it — `IConversationAccess` exposes only the caller's user identity (plus the owner/readonly access guards). Consequence to respect: an Application handler must **never infer a client type**, in particular not by treating a failed identity lookup as "this must be n8n". `[AllowedClients]` is the single gate; handlers that need no user simply do not ask for one.
+
 ```csharp
-public enum Client { App, Mcp, N8n }
+public enum Client { App, Mcp, N8n }   // declared in ChatApp.Api — Application is unaware of it
 
 // Usage on a controller or action:
 [AllowedClients(Client.App, Client.Mcp)]
@@ -235,27 +250,28 @@ SignalR **Groups** map to conversations. Membership changes and OCR state change
 
 **Pattern:** hierarchical rolling summarization. Each conversation keeps a `global_memory`, a list of per-chunk memories (each with a start/end message id), and a running token counter (`pending_tokens`). The pointer to the last summarized message is implicit: the newest chunk's `end_message_id`. (Table shapes: `database-design.md`.)
 
-### Hot path vs cold path
+### Trigger model — detached-per-send (decisions A-1, B-2, B-7, Q-B)
 
-The chat flow never waits for the LLM; it only enqueues a conversation id. A background worker does the summarizing.
+The message-send path never waits for the AI. After it commits the message and broadcasts it, it **kicks off a detached memory-update task that opens its own DI scope** (a fresh `IAppDbContext`, never the request's). There is **no shared queue and no long-running worker** — the send handler fires the work and returns. All heavier steps — the remote token count and any summarization — run inside that detached scope.
 
 ```mermaid
 flowchart LR
-    subgraph Hot["Hot path — synchronous"]
-        Msg["User sends msg"] --> Save["Save to Postgres"]
+    subgraph Send["Send handler — returns immediately"]
+        Msg["User sends msg"] --> Save["Save + commit"]
         Save --> BC["SignalR broadcast"]
-        Save --> Cnt["backend adds token count"]
-        Cnt --> Enq["enqueue convId"]
+        Save --> Fire["fire detached memory task"]
     end
-    subgraph Cold["Cold path — background"]
-        Enq -.-> Q["Channel<Guid> queue"]
-        Q --> Wk["MemoryWorker (BackgroundService)"]
-        Wk --> Chk{"pending_tokens ><br/>threshold?"}
-        Chk -->|no| Wait["wait"]
-        Chk -->|yes| Sum["LLM: chunk summary → fold global"]
-        Sum --> Adv["advance pointer, reset counter"]
+    subgraph Detached["Detached task — own DI scope"]
+        Fire -.-> Count["CountTokensAsync (remote, Gemini)"]
+        Count --> Add["pending_tokens += n"]
+        Add --> Chk{"pending_tokens ><br/>threshold?"}
+        Chk -->|no| Stop["done"]
+        Chk -->|yes| Sum["compose prompt → chunk summary → fold global"]
+        Sum --> Adv["write chunk, update global_memory, reset counter"]
     end
 ```
+
+The chunk + fold logic is a **plain service** called directly by the detached task — never one handler dispatching another through `IMediator` (§4.1). Because a bare detached task is not drained on host shutdown, an in-flight update can be lost on restart; the next message re-fires it, so at worst a chunk is summarized slightly late (see §13).
 
 ### Chunk boundary (snapshot + pointer)
 
@@ -273,12 +289,12 @@ global_memory   = LLM(old global_memory, chunk.memory)    # rolling fold, size-b
 
 | Trigger | Behavior |
 |---|---|
-| **Threshold** | `pending_tokens` crosses the configured threshold → summarize the pending chunk in the background |
-| **On-demand** | A summary is requested → return `global_memory` + a fresh summary from the pointer to now, regardless of threshold |
+| **Threshold** | The detached task finds `pending_tokens` over the configured threshold → it summarizes the pending chunk and folds it into `global_memory` in that same scope |
+| **On-demand** | A summary is requested → **pure read** (decision C-3): return `global_memory` + a freshly-computed summary from the pointer to now, without mutating stored memory or resetting the counter |
 
 **Why it matters.** Because `global_memory` is always current, every summary reads **O(1)** rather than scanning full history. The MCP `summarize_thread` tool and the n8n digest both read the same `global_memory`.
 
-> Token counting is a cheap **local** operation (`Microsoft.ML.Tokenizers`), not an LLM call — only summarization spends money. For an **image message** the token count is taken from its `caption`. The chunk summary is kept token-frugal, but the prompt must preserve core facts (names, decisions, numbers, negations) because the memory is re-fed to the model.
+> Token counting is a **remote call** to Gemini's `countTokens` (`IGenerativeAiService.CountTokensAsync`, decision B-7) — exact for the model's tokenizer, but a network round-trip, which is why it runs in the detached task rather than on the send response path. For an **image message** the count is taken from its `caption`. The chunk summary must preserve core facts (names, decisions, numbers, negations) because the memory is re-fed to the model.
 
 ---
 
@@ -292,7 +308,7 @@ The "AI-assisted image messaging" feature, in two stages.
 
 The `caption` is stored regardless (it feeds conversation memory).
 
-**On demand (collaborative).** When status is `NOT_REQUESTED`, any participant may tap "Extract text". The **first** tap wins a lock (`NOT_REQUESTED → PROCESSING`) and the button is **permanently disabled for everyone** via SignalR. One vision call transcribes to **Markdown**; the text is saved to `ocr_content`, status becomes `FINISHED`, and the hidden **Agent** posts a `text` reply whose `replies_to_message_id` is the image.
+**On demand (collaborative).** When status is `NOT_REQUESTED`, any participant may tap "Extract text". The **first** tap wins a lock (`NOT_REQUESTED → PROCESSING`) and the button is **permanently disabled for everyone** via SignalR. One vision call transcribes to **Markdown**; the text is saved to `ocr_content`, status becomes `FINISHED`, and the hidden **Agent** posts a `text` reply whose `replies_to_message_id` is the image. If the call fails or times out, status is reset to `NOT_REQUESTED` (retryable — B-4).
 
 ```mermaid
 sequenceDiagram
@@ -317,29 +333,28 @@ sequenceDiagram
 
 **Prompt contract.** *"Transcribe the image into clean GitHub-Flavored Markdown, preserving structure (headings, tables, lists, code blocks). Output ONLY markdown. Do not embed raw HTML."*
 
-**OCR status lifecycle:** `TEXT_NOT_FOUND` (terminal) — or — `NOT_REQUESTED → PROCESSING → FINISHED`.
+**OCR status lifecycle:** `TEXT_NOT_FOUND` (terminal) — or — `NOT_REQUESTED → PROCESSING → FINISHED`. **On failure or timeout during `PROCESSING`, the status is reset to `NOT_REQUESTED`** (decision B-4) so the button re-enables and any participant can retry; the lock is therefore *transitional*, not permanent.
 
 ---
 
 ## 8. AI layer (Semantic Kernel)
 
-A thin, swappable layer. Business code calls `IVisionService` / `ISummaryService` — never the model SDK directly. The model is **Google Gemini** via SK's Google connector; because it is exposed through the standard `IChatCompletionService`, swapping providers is a one-line DI change and the service classes are untouched. Gemini is multimodal, so the same model handles both vision (OCR) and summaries. No agents, plugins, planners, or memory constructs are used — the needs are single stateless calls.
+A thin, swappable layer with **one AI port**: `IGenerativeAiService` (decision Q-A). It handles text generation, image generation, and token counting, so business code never touches the model SDK and there is no overlap between competing AI abstractions.
 
 ```csharp
-// NuGet: Microsoft.SemanticKernel.Connectors.Google  (experimental → SKEXP0070)
-#pragma warning disable SKEXP0070
-
-// Build the Kernel once
-builder.Services.AddSingleton(_ =>
-    Kernel.CreateBuilder()
-        .AddGoogleAIGeminiChatCompletion("gemini-2.5-flash", geminiApiKey)  // vision + summarize
-        .Build());
-
-builder.Services.AddScoped<IVisionService, SkVisionService>();
-builder.Services.AddScoped<ISummaryService, SkSummaryService>();
+public interface IGenerativeAiService
+{
+    Task<int> CountTokensAsync(string text, CancellationToken cancellationToken = default);
+    Task<T> GenerateContentAsync<T>(string prompt, double temp = 1.0, CancellationToken cancellationToken = default);
+    Task<T> GenerateContentFromImageAsync<T>(string prompt, byte[] imageAsBytes, double temp = 1.0, CancellationToken cancellationToken = default);
+    Task<T> GenerateContentFromImageAsync<T>(string prompt, string imageUrl, double temp = 1.0, CancellationToken cancellationToken = default);
+}
 ```
 
-Both services resolve `kernel.GetRequiredService<IChatCompletionService>()`; OCR attaches the image via `ImageContent`, summarization sends text only.
+- **Prompts live in the Application layer** (decision A-2b): the caller composes the prompt string and calls this port; Infrastructure only executes it. The four `Internal/*` handlers and the on-send caption/OCR paths all go through this one port.
+- **Implementation (Infrastructure)** wraps **Google Gemini `gemini-2.5-flash`** via `Microsoft.SemanticKernel.Connectors.Google` (`AddGoogleAIGeminiChatCompletion`, experimental `SKEXP0070`). Gemini is multimodal, so the same model backs both the text and image overloads. Swapping providers is confined to this one adapter.
+- **`CountTokensAsync` is a remote call** to Gemini's `countTokens` (decision B-7): it is exact for the model's tokenizer but costs a network round-trip, so it must run **off the message-send response path** (see §6). This replaces the removed local `ITokenCounter`.
+- `GenerateContentAsync<T>` returns `T` (typically `string`, or a JSON-shaped record when the prompt asks for structured output); the caller owns the prompt contract that makes `T` valid.
 
 ---
 
@@ -363,7 +378,10 @@ Auth: the **App** carries the Supabase JWT (`Authorization: Bearer <token>` / Si
 | `NewMessage` | message | New message (user or Agent) |
 | `OcrStarted` | `messageId` | Disable "Extract text" for all |
 | `OcrDone` | `messageId` | OCR finished (reply already broadcast) |
-| `MemberChanged` | `conversationId`, `userId`, `action` | Member added/removed/left |
+| `MemberChanged` | `conversationId`, `userId`, `action` | Participant added/removed/left |
+| `DigestPublished` | digest content, date | The n8n daily digest was published (not conversation-scoped) |
+
+The Application-side port for these broadcasts is **`IConversationNotifier`**.
 
 ### 9.2 REST
 
@@ -371,19 +389,21 @@ Auth: the App uses the Supabase JWT; MCP and n8n use service keys (§4.2). The *
 
 | Method | Path | Role | Clients | Description |
 |---|---|---|---|---|
-| `GET` | `/api/conversations?q=<term>` | member | App, Mcp | List the caller's conversations; **`q` empty → all**, otherwise filtered (search merged in) |
+| `GET` | `/api/conversations?q=<term>` | member | App, Mcp | List the caller's conversations; **`q` empty → all**, otherwise filtered (search merged in). Excludes deleted. |
 | `POST` | `/api/conversations` | any | App | Create a conversation with ≥1 other participant (caller becomes owner; `public_id` + `display_name` auto-generated) |
 | `POST` | `/api/conversations/join` | any | App, Mcp | Join by **`public_id`** in the body (rejected if frozen/deleted) |
-| `PATCH` | `/api/conversations/{id}` | **owner** | App | Rename `display_name` and/or set `is_readonly` |
+| `PATCH` | `/api/conversations/{id}/name` | **owner** | App | Rename `display_name` (≤ 100 chars; letters, digits, comma, space) |
+| `PATCH` | `/api/conversations/{id}/readonly` | **owner** | App | Set `is_readonly` |
 | `POST` | `/api/conversations/{id}/transfer` | **owner** | App | Transfer ownership to another participant |
-| `GET` | `/api/conversations/{id}/messages?before=&limit=` | member | App | Paginated history |
-| `POST` | `/api/conversations/{id}/members` | **owner** | App | Add a participant |
-| `DELETE` | `/api/conversations/{id}/members/{userId}` | **owner** | App | Remove a participant |
+| `GET` | `/api/conversations/{id}/messages?before=&limit=` | member | App | Paginated history. `before` = message id (omitted ⇒ newest); `limit` default 50, max 100. **Filter and order on the `(sent_at, id)` tuple** — comparing `sent_at` alone loses the tie-stability that a message-id cursor exists to provide |
+| `POST` | `/api/conversations/{id}/participants` | **owner** | App | **Add a batch** of participants (all-or-nothing) |
+| `DELETE` | `/api/conversations/{id}/participants` | **owner** | App | **Remove a batch** of participants (all-or-nothing); cannot remove the owner |
 | `POST` | `/api/conversations/{id}/leave` | member | App | Leave; owner passes `mode = delete \| freeze` |
 | `POST` | `/api/messages/{id}/ocr` | member | App | Trigger collaborative OCR (first-tap-wins) |
 | `POST` | `/api/conversations/{id}/summary` | member | App, Mcp, N8n | On-demand summary (global + tail) |
-| `GET` | `/api/internal/threads` | — | **N8n** | Bulk: all threads for the daily digest |
-| `POST` | `/api/internal/digest` | — | **N8n** | Publish the 24h digest to the web page |
+| `GET` | `/api/internal/conversations` | — | **N8n** | Bulk: all non-deleted conversations |
+| `POST` | `/api/internal/summaries?hoursAgo=24` | — | **N8n** | Backend-produced roll-up across conversations active in the window |
+| `POST` | `/api/internal/digest` | — | **N8n** | Publish the digest (broadcast to listeners) |
 
 ```jsonc
 // GET /api/conversations           → all conversations
@@ -392,17 +412,22 @@ Auth: the App uses the Supabase JWT; MCP and n8n use service keys (§4.2). The *
 // POST /api/conversations/join
 { "publicId": "Ab3Xy9" }
 
+// POST /api/conversations/{id}/participants
+{ "userIds": ["…", "…"] }        // batch, all-or-nothing
+
 // POST /api/messages/{id}/ocr → 202; result arrives via SignalR (Agent reply)
 { "status": "PROCESSING" }
 ```
 
-The user-facing endpoints reject `Mcp`/`N8n`, and the `/api/internal/*` endpoints reject `App`/`Mcp` — enforcing that a User cannot reach n8n-only endpoints and n8n cannot reach user endpoints.
+Two field limits are product decisions, recorded here as the contract: `display_name` ≤ **100** characters, and `limit` ∈ **[1, 100]** with default **50**.
+
+The user-facing endpoints reject `Mcp`/`N8n`, and the `/api/internal/*` endpoints reject `App`/`Mcp` — enforcing that a User cannot reach n8n-only endpoints and n8n cannot reach user endpoints. **Client-type authorization is owned entirely by the Api layer** (`[AllowedClients]`); the Application layer is deliberately unaware of which client called it, so handlers must never infer a client type (for example, from a failed identity lookup).
 
 ### 9.3 External clients (MCP, n8n)
 
 MCP and n8n are **not part of the backend** — they are external clients that call the REST API above with the `Mcp` / `N8n` client credentials (§4.2). The backend has no MCP- or n8n-specific logic. Their designs live in their own documents:
 
-- **ChatGPT via MCP** → `mcp-integration.md` (tools map to `GetConversationsQuery`, `SummarizeThreadQuery`, join).
+- **ChatGPT via MCP** → `mcp-integration.md` (tools map to `GetActiveConversations`, `SummarizeConversation`, join).
 - **Scheduled summaries via n8n** → `n8n-workflow.md` (daily job hitting `/api/internal/*` and the summary endpoint).
 
 ## 10. Codebase architecture
@@ -430,7 +455,7 @@ Arrows are compile-time references. **`Application` never references `Infrastruc
 | Project | Role | Change it when… |
 |---|---|---|
 | **Domain** | Entities, enums, invariant guards; zero dependencies | a field/entity or business invariant changes |
-| **Application** | Vertical-slice use cases (MediatR) + **ports** (`IAppDbContext`, `IChatNotifier`, `IStorageClient`, `IVisionService`, `ISummaryService`, `IOcrService`, `IMemoryQueue`, `ITokenCounter`, `ICurrentUser`) | you add a use case or change business flow |
+| **Application** | Vertical-slice use cases (MediatR) + **ports** (`IAppDbContext`, `IConversationNotifier`, `IStorageClient`, `IOcrService`, `IGenerativeAiService`, `IConversationAccess`; AI-port set being consolidated — see open question) | you add a use case or change business flow |
 | **Infrastructure** | **Adapters**: EF Core/Npgsql, Supabase Storage, SK+Gemini, tokenizer, memory worker plumbing | you swap DB / storage / AI provider |
 | **Api** | Host: controllers, SignalR Hub, `[AllowedClients]`, DI, background service | you change routes, realtime, or client auth |
 
@@ -444,38 +469,43 @@ backend/
 │   │   ├── Entities/                    # Profile, Conversation, Participant,
 │   │   │                                #   Message, TextMessage, ImageMessage,
 │   │   │                                #   ConversationMemory, ChunkMemory
-│   │   ├── Enums/                        # MessageType, OcrStatus
-│   │   └── Errors/                       # domain errors + invariant guards
+│   │   └── Enums/                        # MessageType, OcrStatus   (no validation, no throwing)
 │   │
-│   ├── ChatApp.Application/             # deps: Domain, mediator, FluentValidation
-│   │   ├── Abstractions/                 # PORTS (interfaces)
-│   │   ├── Features/                     # VERTICAL SLICES (Command+Handler+Validator)
-│   │   │   ├── Conversations/            #   Create, Join, Leave, Rename,
-│   │   │   │                             #   SetReadonly, TransferOwnership,
-│   │   │   │                             #   AddParticipant, RemoveParticipant,
-│   │   │   │                             #   GetConversations (q empty => all)
-│   │   │   ├── Messages/                 #   SendMessage, SendImage, GetMessages
-│   │   │   ├── Ocr/                      #   TriggerOcr (first-tap-wins)
-│   │   │   ├── Summaries/                #   SummarizeThread (global + tail)
-│   │   │   └── Internal/                 #   GetAllThreads, PublishDigest (n8n)
-│   │   ├── Memory/                        # MemoryService (snapshot + fold, via ports)
+│   ├── ChatApp.Application/             # deps: Domain, mediator, FluentValidation,
+│   │   │                                #       Logging.Abstractions (explicit)
+│   │   ├── DependencyInjection.cs        # AddApplication(): mediator + behaviors + validators
+│   │   ├── Abstractions/                 # PORTS (interfaces only)
+│   │   ├── Features/                     # VERTICAL SLICES (Command|Query + Handler + Validator)
+│   │   │   ├── Conversations/            #   Create, Join, Leave, Rename, SetReadonly,
+│   │   │   │                             #   TransferOwnership, AddParticipants,
+│   │   │   │                             #   RemoveParticipants (batch),
+│   │   │   │                             #   GetActiveConversations (q empty => all)
+│   │   │   ├── Messages/                 #   Send, SendImage, Get,
+│   │   │   │                             #   OcrImageMessage (first-tap-wins)
+│   │   │   └── Internal/                 #   SummarizeConversation (App+Mcp+n8n),
+│   │   │                                 #   GetAllConversations, SummarizeConversations
+│   │   │                                 #   (24h roll-up), PublishDigest   [n8n only]
+│   │   ├── Memory/                        # plain conversation-memory service: chunk + fold
+│   │   │                                 #   logic, called directly by the detached
+│   │   │                                 #   send-triggered task (NOT via IMediator)
 │   │   └── Common/
 │   │       ├── Behaviors/                 # ValidationBehavior, LoggingBehavior (only 2)
-│   │       ├── Client.cs                  # enum { App, Mcp, N8n }
-│   │       └── Results/                   # Result<T>, Error
+│   │       └── Results/                   # Result, Result<T>, Error, ErrorType, IResult<TSelf>
+│   │                                      # (no Client enum — client auth is an Api concern, §4.2)
 │   │
 │   ├── ChatApp.Infrastructure/         # deps: Application, Domain, EF Core, SK
 │   │   ├── Persistence/                  # AppDbContext : IAppDbContext, Configurations/
 │   │   ├── Storage/                      # SupabaseStorageClient : IStorageClient
-│   │   ├── Ai/                           # KernelFactory (Gemini), SkVisionService,
-│   │   │                                 #   SkSummaryService, SkOcrService, Prompts/
+│   │   ├── Ai/                           # GeminiGenerativeAiService : IGenerativeAiService
+│   │   │                                 #   (SK Google connector). Prompts are passed in
+│   │   │                                 #   by Application, not stored here
 │   │   ├── Memory/                       # TokenCounter, MemoryQueue (Channel<Guid>)
 │   │   └── DependencyInjection.cs        # AddInfrastructure(...)
 │   │
 │   └── ChatApp.Api/                     # deps: Application, Infrastructure
 │       ├── Program.cs                    # composition root: DI, JWT, SignalR, mediator
 │       ├── Controllers/                  # thin: HTTP -> ISender.Send
-│       ├── Realtime/                     # ChatHub, SignalRChatNotifier : IChatNotifier
+│       ├── Realtime/                     # ChatHub, SignalRNotifier : IConversationNotifier
 │       ├── Auth/                         # AllowedClientsAttribute, ClientAuthHandler
 │       └── Hosted/                       # MemoryWorker : BackgroundService
 │
@@ -517,7 +547,11 @@ public async Task<IActionResult> Join(JoinConversationCommand cmd)
 ## 11. Security
 
 - **Authentication** — the App is authenticated via Supabase Auth (JWT Bearer, validated against Supabase's issuer/signing key; passed to SignalR via `accessTokenFactory`). MCP and n8n authenticate with service keys that resolve to a `client` claim.
-- **Authorization — three layers, defense in depth.** (1) **Client type** — `[AllowedClients(...)]` restricts each endpoint to App / Mcp / N8n (§4.2). (2) **User & ownership** — membership and owner-only rules in the handlers. (3) **Row-Level Security** in Postgres. Hiding a button is not security; all three run server-side. (RLS design, including how membership checks avoid recursion, is in `database-design.md`.)
+- **Authorization — two layers guarding *different* surfaces, not the same one twice.**
+  1. **Backend traffic** (App via REST/SignalR, plus MCP and n8n) — enforced by `[AllowedClients(...)]` at the edge (§4.2) and by membership/owner rules inside the handlers. This is the **only** authorization for any request that goes through the .NET API.
+  2. **Direct Supabase traffic** — a Supabase project also exposes PostgREST publicly, and the **anon key ships in the frontend**. **Row-Level Security is what makes that surface safe**: without it, anyone holding the anon key could read every table directly. (RLS design, including how membership checks avoid recursion, is in `database-design.md`.)
+
+  > **Consequence to design for, not around.** The backend connects to Postgres with a **service role, which bypasses RLS** — so RLS is *not* a second check on backend queries, and handler-level checks are load-bearing on their own. Conversely, if Infrastructure ever configures the connection with a role that RLS *does* apply to, `auth.uid()` is `NULL` in that session, every policy evaluates false, and **every query silently returns zero rows** rather than failing loudly. Verify the connection role first when debugging "the query returns nothing".
 - **XSS** — OCR output is Markdown rendered with raw HTML disabled; the prompt forbids embedded HTML.
 - **Cost abuse** — all AI is pull-based and locked/cached (principles 3–4), so no user or large group can trigger runaway spend.
 
@@ -536,13 +570,20 @@ public async Task<IActionResult> Join(JoinConversationCommand cmd)
 
 ## 13. Known limitations
 
+> **Delivery bar: ship-oriented.** This is a single-developer, deadline-bound take-home whose grading criteria are a running repo, a clear README, and commit history — not a production hardening pass. The limitations below are **knowingly accepted for this deliverable**; the fix path is noted for each but is out of scope now. Concretely, work is prioritised as:
+> - **Must fix (a broken or visibly-flawed demo):** anything that fails at runtime on the happy path, anything the reviewer sees on `dotnet build`/startup, and the F-7 summarization feature (it also powers the MCP `summarize_thread` tool and the n8n digest — both graded).
+> - **Cheap polish worth doing:** user-facing error-message typos, missing XML docs, a non-crypto `PublicId` generator.
+> - **Deferred:** double identity resolution, transactional message+token writes, per-field validation errors, and a full unit-test suite for all 19 slices. A few high-value tests (a "every `IRequest<T>` has a registered handler" smoke test; memory-fold and ownership-rule tests) are kept; exhaustive coverage is not.
+>
+> **Sequencing consequence:** the critical path to unblock the `ChatApp.Api` task is small (fix the two blocking defects + add `AddApplication()`), so Api scaffolding should start **in parallel** rather than waiting for the Application layer to be fully polished — otherwise the largest remaining piece (F-7) gates having anything demonstrable.
+
 | Limitation | Rationale / mitigation |
 |---|---|
-| Single backend instance assumed | In-memory locks and the `Channel` queue don't survive restart or scale-out. Path: Redis/Postgres locks, Hangfire queue. |
+| Single backend instance assumed | In-memory OCR locks and detached memory tasks don't survive restart or scale-out. Path: Redis/Postgres locks, and a durable queue + hosted worker if the fire-and-forget guarantee needs strengthening. |
 | Frozen conversation is unmanaged | Freeze sets `owner_id = null`; no one can add/remove members or rename until... it stays frozen (by design — the owner chose freeze over transfer). New joins are blocked; existing members chat or leave. |
 | Manual readonly can be cleared by a join | `is_readonly` is a single flag auto-managed at the 1↔2 boundary; an owner's manual readonly is cleared if participants cross back through that boundary. Accepted simplification. |
 | Summaries can lose nuance | Prompt preserves core facts; the global fold adds redundancy. |
-| Memory worker loss on restart | Enqueued ids are in memory; the next message re-enqueues, so at worst a chunk is summarized slightly late. |
+| Detached memory task loss on restart | The send-triggered memory task is not drained on host shutdown, so an in-flight update can be lost; the next message re-fires it, so at worst a chunk is summarized slightly late. |
 | OCR quality depends on the vision model | Text presence is detected on send; if none, status is `TEXT_NOT_FOUND` and no button appears. |
 
 ---
@@ -559,7 +600,7 @@ public async Task<IActionResult> Join(JoinConversationCommand cmd)
 - [MediatR (GitHub)](https://github.com/jbogard/MediatR) · [MediatR licensing / commercial](https://mediatr.io/) · free drop-ins: [`Mediator` (source-gen)](https://github.com/martinothamar/Mediator), [`FreeMediator`](https://www.nuget.org/packages/FreeMediator) · [FluentValidation](https://docs.fluentvalidation.net/)
 
 **AI**
-- [Semantic Kernel](https://learn.microsoft.com/semantic-kernel/overview/) · [SK Google Gemini connector (`AddGoogleAIGeminiChatCompletion`)](https://learn.microsoft.com/dotnet/api/microsoft.semantickernel.googleaikernelbuilderextensions.addgoogleaigeminichatcompletion) · [Gemini API models](https://ai.google.dev/gemini-api/docs/models) · [Microsoft.ML.Tokenizers](https://learn.microsoft.com/dotnet/api/microsoft.ml.tokenizers)
+- [Semantic Kernel](https://learn.microsoft.com/semantic-kernel/overview/) · [SK Google Gemini connector (`AddGoogleAIGeminiChatCompletion`)](https://learn.microsoft.com/dotnet/api/microsoft.semantickernel.googleaikernelbuilderextensions.addgoogleaigeminichatcompletion) · [Gemini API models](https://ai.google.dev/gemini-api/docs/models) · [Gemini `countTokens`](https://ai.google.dev/api/tokens)
 
 **Supabase**
 - [Auth](https://supabase.com/docs/guides/auth) · [Storage](https://supabase.com/docs/guides/storage) · [Row-Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) · [Validating Supabase JWTs in a backend](https://supabase.com/docs/guides/auth/jwts)
