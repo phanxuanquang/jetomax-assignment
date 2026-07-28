@@ -12,16 +12,14 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
     /// <summary>
     /// Looks up the conversation by <c>PublicId</c>, rejects frozen/deleted/missing conversations,
     /// and adds the caller as a participant unless already joined. Mirrors the DB's 1↔2 readonly
-    /// auto-clear boundary when this join brings membership to exactly 2. Loads the participant list
-    /// once and reuses it for both the membership check and the returned DTO, rather than querying
-    /// it multiple times.
+    /// auto-clear boundary when this join brings membership to exactly 2.
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
         var currentUserResult = await currentUser.GetCurrentUserAsync(cancellationToken);
         if (!currentUserResult.IsSuccess)
         {
-            return Result<ConversationDto>.Failure(currentUserResult.Error!);
+            return Result.Failure(currentUserResult.Error!);
         }
 
         var currentUserId = currentUserResult.Value!.Id;
@@ -32,12 +30,12 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
 
         if (conversation is null)
         {
-            return Result<ConversationDto>.Failure(Error.NotFound("conversation.not_found", "Conversation not found."));
+            return Result.Failure(Error.NotFound("conversation.not_found", "Conversation not found."));
         }
 
         if (conversation.OwnerId is null)
         {
-            return Result<ConversationDto>.Failure(Error.Conflict("conversation.frozen", "This conversation is frozen and cannot be joined."));
+            return Result.Failure(Error.Conflict("conversation.frozen", "This conversation is frozen and cannot be joined."));
         }
 
         var participantIds = await db.ToListAsync(
@@ -54,10 +52,8 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
             db.Add(new Participant(conversation.Id, currentUserId));
             await db.SaveChangesAsync(cancellationToken);
             await notifier.NotifyMemberChangedAsync(conversation.Id, currentUserId, MemberChangeAction.Joined, cancellationToken);
-
-            participantIds.Add(currentUserId);
         }
 
-        return Result<ConversationDto>.Success();
+        return Result.Success();
     }
 }

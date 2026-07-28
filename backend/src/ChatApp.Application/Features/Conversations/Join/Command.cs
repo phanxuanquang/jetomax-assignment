@@ -8,4 +8,4 @@ namespace ChatApp.Application.Features.Conversations.Join;
 /// Rejected if the conversation is frozen or deleted; a no-op if the caller already joined.
 /// </summary>
 /// <param name="PublicId">The exact, case-sensitive public code of the conversation to join.</param>
-public sealed record Command(string PublicId) : IRequest<Result<ConversationDto>>;
+public sealed record Command(string PublicId) : IRequest<Result>;
