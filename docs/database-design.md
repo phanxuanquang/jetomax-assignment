@@ -2,7 +2,7 @@
 
 The data model. It is the concrete counterpart to `schema.sql`; every table, constraint, and trigger here maps 1:1 to that script. Technical usage is in `backend-system-design-and-architecture.md`; requirements in `software-requirements-specification.md`.
 
-> **Principle.** Postgres is the single source of truth. Realtime only *notifies*. Conversations are **soft-deleted** (`is_deleted`), never dropped. AI outputs (OCR results) and the Agent reuse the message tables — the schema does not grow to add AI.
+> **Principle.** Postgres is the single source of truth. Realtime only *notifies*. Conversations are **soft-deleted** (`is_deleted`), never dropped. The AI-generated image caption reuses the message tables — the schema does not grow to add AI.
 
 Engine: **PostgreSQL** (via **Supabase**). UUID keys, `timestamptz` timestamps, enums modeled as `CHECK` constraints. SQL columns are snake_case; the spec's PascalCase names map directly (e.g. `OwnerId → owner_id`, `Timestamp → sent_at`).
 
@@ -57,8 +57,6 @@ erDiagram
         uuid message_id PK
         text image_url
         text caption
-        text ocr_status
-        text ocr_content
     }
     conversation_memory {
         uuid conversation_id PK
@@ -85,7 +83,7 @@ Eight tables: users, conversations, participants, a table-per-type message trio,
 |---|---|---|---|
 | `id` | uuid | PK | = Supabase auth id |
 | `username` | text | **unique**, `~ '^[A-Za-z0-9]{1,30}$'` | letters + digits, ≤30; the user's public handle |
-| `is_agent` | boolean | not null, default false | hidden OCR Agent |
+| `is_agent` | boolean | not null, default false | hidden system user reserved for AI-posted messages — **not currently used by any feature** (see note) |
 | `created_time` | timestamptz | not null, default now() | |
 
 ### conversations
@@ -117,7 +115,7 @@ The Agent is **not** a participant, so participant counts are always human.
 | `conversation_id` | uuid | FK → conversations, on delete cascade | |
 | `user_id` | uuid | FK → profiles, on delete cascade | sender (user or Agent) |
 | `type` | text | check in (`text`,`image`) | **discriminator** |
-| `replies_to_message_id` | uuid | FK → messages, on delete set null | OCR reply points to the image |
+| `replies_to_message_id` | uuid | FK → messages, on delete set null | generic reply-to; not currently used by any feature (kept for the reply-threading shape) |
 | `sent_at` | timestamptz | not null, default now() | spec's `Timestamp` |
 
 ### text_messages
@@ -131,9 +129,7 @@ The Agent is **not** a participant, so participant counts are always human.
 |---|---|---|---|
 | `message_id` | uuid | PK, FK → messages, on delete cascade | |
 | `image_url` | text | not null | |
-| `caption` | text | | AI caption generated on send (feeds memory) |
-| `ocr_status` | text | check in (`NOT_REQUESTED`,`PROCESSING`,`FINISHED`,`TEXT_NOT_FOUND`) | set on send by text-detection |
-| `ocr_content` | text | nullable | filled when OCR finishes |
+| `caption` | text | | AI caption generated on send (feeds memory) — the only AI output an image carries |
 
 ### conversation_memory (1:1)
 | Column | Type | Constraints | Notes |
@@ -206,7 +202,7 @@ Create-time bookkeeping (owner-as-participant + the 1:1 `conversation_memory` ro
 
 Hierarchical rolling summarization (mechanics in the architecture doc §6). Field mapping to the spec: `GlobalMemory → global_memory`, `PendingTokens → pending_tokens`, chunk `Memory → memory` with `StartMessageId`/`EndMessageId`.
 
-- **`conversation_memory`** holds the live state: `global_memory` (evolving overall recap) and `pending_tokens` (accrued since the last chunk; a **detached, send-triggered task** increments this per message via a **remote** `IGenerativeAiService.CountTokensAsync` call — an image message counts the tokens of its `caption`). The count runs off the send response path (architecture §6).
+- **`conversation_memory`** holds the live state: `global_memory` (evolving overall recap) and `pending_tokens` (accrued since the last chunk; a **detached, send-triggered task** increments this per message via `IGenerativeAiService.CountTokensAsync` — a cheap **local, approximate** count, not a remote call — an image message counts the tokens of its `caption`). See architecture §6/§8 for why an approximate local count was chosen over an exact remote one.
 - **`chunk_memories`** is the append-only, `id`-ordered history; each row's `start_message_id`/`end_message_id` bound its message range.
 
 When `pending_tokens` crosses the configured threshold, the backend forms a new chunk over the pending messages, writes its `memory`, folds it into `global_memory`, and resets `pending_tokens`. An **on-demand summary is a pure read** (decision C-3): it returns `global_memory` plus a freshly-computed summary of messages after the newest chunk's `end_message_id`, and **never mutates stored memory or incurs a write** — never a full-history scan.
@@ -221,7 +217,7 @@ The database is the **integrity backstop**, not the primary validator. Field-for
 |---|---|
 | `username` format (`^[A-Za-z0-9]{1,30}$`) and uniqueness | CHECK + UNIQUE |
 | `public_id` format (6 alphanumeric) and uniqueness | CHECK + UNIQUE |
-| `type`, `ocr_status` domains | CHECK |
+| `type` domain | CHECK |
 | `pending_tokens ≥ 0` | CHECK |
 | referential integrity | FK (+ cascade) |
 | per-row authorization | RLS (below) |
@@ -249,10 +245,10 @@ Policy summary (`auth.uid()` = current user):
 | conversations | `is_participant(id)` & not deleted | `owner_id = auth.uid()` | `is_owner(id)` (rename / readonly / transfer / soft-delete / freeze) | — (soft delete via update) |
 | participants | `is_participant(conversation_id)` | `is_owner(...)` **or** self-join (`user_id=auth.uid()` & `can_join`) | — | `is_owner(...)` **or** self-leave |
 | messages | `is_participant(conversation_id)` | sender is self, participant, and not blocked by readonly (unless owner) | — | — |
-| text_messages / image_messages | participant of parent's conversation | caller owns the parent message | service role (OCR/caption) | — |
+| text_messages / image_messages | participant of parent's conversation | caller owns the parent message | service role (caption) | — |
 | conversation_memory / chunk_memories | `is_participant(conversation_id)` | service role | service role | service role |
 
-Background writes (memory worker) and Agent OCR/caption writes run with the **service role**, which bypasses RLS by design.
+Background writes (memory worker) and the caption write on image send run with the **service role**, which bypasses RLS by design.
 
 > **What RLS actually protects here.** All table access from the app goes through the .NET backend, and that backend connects with a **service role that bypasses RLS** — so these policies are *not* a second check on backend queries. They exist because a Supabase project also exposes **PostgREST publicly**, and the **anon key ships in the frontend**: without RLS, anyone holding that key could read every table directly. Two practical rules follow:
 >
@@ -265,8 +261,7 @@ Background writes (memory worker) and Agent OCR/caption writes run with the **se
 
 - **Create conversation** (≥2 participants) → row with generated `public_id`; owner auto-membered; empty memory row.
 - **Join** → user submits `public_id`; if the conversation is joinable (`can_join`), a `participants` row is added; if this makes count = 2, readonly auto-clears.
-- **Send message** → base `messages` row + `text_messages`/`image_messages` child; `last_message_time` updated; backend adds token count. Image sends also set `caption` + `ocr_status` (`NOT_REQUESTED` or `TEXT_NOT_FOUND`) via one vision pass.
-- **OCR** → `ocr_status` `NOT_REQUESTED → PROCESSING → FINISHED`; `ocr_content` filled; Agent posts a `text` reply (`replies_to_message_id` = image).
+- **Send message** → base `messages` row + `text_messages`/`image_messages` child; `last_message_time` updated; backend adds token count. Image sends also set `caption` via one vision pass (this is the only AI step an image goes through — there is no OCR/text-extraction feature).
 - **Transfer ownership** → `owner_id` updated to another participant.
 - **Owner leaves** → soft-delete (`is_deleted = true`) or **freeze** (`owner_id = null`).
 - **Participant leaves** → row removed; if count drops to 1, readonly auto-set.
@@ -275,4 +270,4 @@ Background writes (memory worker) and Agent OCR/caption writes run with the **se
 
 ## Mapping & verification
 
-This design maps 1:1 to `schema.sql`. That script is **idempotent** and was verified on PostgreSQL 16: it runs twice cleanly, and functional tests confirm the username/`public_id` format checks, ownership **transfer** and **freeze** (`owner_id = null`), the readonly auto-toggle at the 1↔2 boundary, the message `type` discriminator and `ocr_status` domain, and the `last_message_time` trigger.
+This design maps 1:1 to `schema.sql`. That script is **idempotent** and was verified on PostgreSQL 16: it runs twice cleanly, and functional tests confirm the username/`public_id` format checks, ownership **transfer** and **freeze** (`owner_id = null`), the readonly auto-toggle at the 1↔2 boundary, the message `type` discriminator, and the `last_message_time` trigger.

@@ -18,7 +18,7 @@ create table if not exists profiles (
     id            uuid primary key default gen_random_uuid(),
     username      text not null unique
                       check (username ~ '^[A-Za-z0-9]{1,30}$'),   -- letters+digits, <=30
-    is_agent      boolean not null default false,                 -- hidden OCR Agent
+    is_agent      boolean not null default false,                 -- reserved for AI-posted messages (unused)
     created_time  timestamptz not null default now()
 );
 
@@ -61,10 +61,7 @@ create table if not exists text_messages (
 create table if not exists image_messages (
     message_id  uuid primary key references messages(id) on delete cascade,
     image_url   text not null,
-    caption     text,                                               -- AI caption (set on send)
-    ocr_status  text not null default 'NOT_REQUESTED'
-                    check (ocr_status in ('NOT_REQUESTED','PROCESSING','FINISHED','TEXT_NOT_FOUND')),
-    ocr_content text
+    caption     text                                                -- AI caption (set on send)
 );
 
 -- 1:1 rolling memory state per conversation.
@@ -184,7 +181,8 @@ begin
 end $$;
 
 -- -----------------------------------------------------------------------------
--- 5. SEED — the hidden system Agent (posts OCR replies)
+-- 5. SEED — a hidden system user reserved for AI-posted messages
+--    (not currently used by any feature — see database-design.md)
 -- -----------------------------------------------------------------------------
 insert into profiles (id, username, is_agent)
 values ('00000000-0000-0000-0000-000000000001', 'aiagent', true)
@@ -270,7 +268,7 @@ create policy messages_insert on messages for insert
                 and (not is_readonly(conversation_id) or is_owner(conversation_id)));
 
 -- text/image children: read if participant of the parent's conversation;
---   insert if you own the parent message. OCR/caption updates are service-role.
+--   insert if you own the parent message. Caption updates are service-role.
 drop policy if exists text_select on text_messages;
 create policy text_select on text_messages for select
     using (exists (select 1 from messages m

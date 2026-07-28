@@ -22,8 +22,6 @@ A **realtime chat application** where users message each other one-to-one, creat
 | Owner | The creator of a conversation; **transferable**; `null` owner ⟺ **frozen** |
 | PublicId | 6-char case-sensitive alphanumeric code used to join a conversation |
 | Member | A participant of a conversation |
-| AI Agent | Hidden system user that posts AI (OCR) results as messages |
-| OCR | Optical Character Recognition — transcribing image text to Markdown |
 | MCP | Model Context Protocol — lets ChatGPT call the app's tools |
 | RLS | Row-Level Security — per-row authorization enforced in Postgres |
 
@@ -38,9 +36,8 @@ Delivered as a single **responsive PWA** rather than three native apps: one code
 
 | Actor | Description |
 |---|---|
-| **User** | A registered person; can chat 1:1, create/join groups, send images, trigger OCR, request summaries |
+| **User** | A registered person; can chat 1:1, create/join groups, send images, request summaries |
 | **Group Owner** | A User who created a group; additionally manages members and can delete the group |
-| **AI Agent** | System actor; posts OCR results into conversations |
 | **ChatGPT** | External actor; via MCP, lists conversations, summarizes a thread, joins a group |
 | **n8n Scheduler** | External actor; runs the daily summary workflow |
 
@@ -50,7 +47,7 @@ Delivered as a single **responsive PWA** rather than three native apps: one code
 |---|---|---|
 | A1 | Cross-platform = one PWA, not native apps | Coverage with minimal effort |
 | A2 | General-purpose chat (no domain context) | Feature set stays broadly applicable |
-| A3 | "AI-assisted image messaging" = collaborative OCR to Markdown | Cheaper, faster, safer, more demoable than image generation |
+| A3 | "AI-assisted image messaging" = an on-send caption (feeds memory); OCR/text-extraction was descoped | Cheaper, faster, simpler than adding an extraction feature |
 | A4 | Single owner per conversation, **transferable**; owner leaving chooses delete or freeze | Simple, explicit ownership without multi-owner conflicts |
 | A5 | Rolling conversation memory backs all summaries | Makes per-thread and 24h summaries O(1) to produce |
 | A6 | n8n runs on a daily schedule | "Last 24 hours" implies a periodic job |
@@ -70,7 +67,6 @@ flowchart LR
     O(["Group Owner"])
     GPT(["ChatGPT"])
     N8N(["n8n Scheduler"])
-    AG(["AI Agent"])
 
     subgraph SYS["Realtime Chat Application"]
         UC_AUTH["Register / Sign in"]
@@ -79,7 +75,6 @@ flowchart LR
         UC_JOIN["Join by PublicId"]
         UC_MSG["Send / receive messages"]
         UC_IMG["Send / receive images"]
-        UC_OCR["Extract text from image (OCR)"]
         UC_SUM["Request thread summary"]
         UC_MANAGE["Add / remove participants"]
         UC_RENAME["Rename conversation"]
@@ -96,7 +91,6 @@ flowchart LR
     U --> UC_JOIN
     U --> UC_MSG
     U --> UC_IMG
-    U --> UC_OCR
     U --> UC_SUM
     U --> UC_LEAVE
 
@@ -105,7 +99,6 @@ flowchart LR
     O --> UC_RO
     O --> UC_XFER
 
-    UC_OCR -.->|posts result| AG
     GPT -->|list, MCP| UC_MSG
     GPT -->|summarize, MCP| UC_SUM
     GPT -->|join, MCP| UC_JOIN
@@ -164,19 +157,11 @@ flowchart TD
 **Edge cases.** A frozen conversation stays unmanaged (no owner) until... it remains frozen (owner chose freeze over transfer); a manual readonly can be cleared by a subsequent join crossing the 1↔2 boundary (accepted simplification).
 
 ### F-5 · Image messaging
-**Behavior.** A participant sends **one image per message**. The client uploads it **directly** to Supabase Storage, then sends a message carrying the URL; the backend never streams bytes. On send, the backend makes one vision pass that (a) generates a **caption** (feeds memory) and (b) **detects whether the image contains text**, setting `OcrStatus` to `TEXT_NOT_FOUND` (no text) or `NOT_REQUESTED` (text present).
-**Acceptance.** A member sends an image and all participants see it inline in realtime; images persist and reload with history; each image has a caption and an initial OcrStatus.
-**Edge cases.** Oversized/non-image uploads rejected client-side; a failed caption/detection never blocks the image from sending (status falls back safely).
+**Behavior.** A participant sends **one image per message**. The client uploads it **directly** to Supabase Storage, then sends a message carrying the URL; the backend never streams bytes. On send, the backend makes one vision pass that generates a **caption**, which feeds conversation memory. There is no text-extraction/OCR feature — captioning is the only AI step an image goes through.
+**Acceptance.** A member sends an image and all participants see it inline in realtime; images persist and reload with history; each image has a caption.
+**Edge cases.** Oversized/non-image uploads rejected client-side; a failed captioning call never blocks the image from sending (caption falls back to empty/null).
 
-### F-6 · AI-assisted image messaging (collaborative OCR)
-**Behavior.** For an image with `OcrStatus = NOT_REQUESTED` (text detected on send, per F-5), every participant sees an **"Extract text"** button. The **first** to tap it acquires a lock (`NOT_REQUESTED → PROCESSING`) and the button is **permanently disabled for everyone** via realtime. One vision call transcribes the image to **Markdown**, stored in `OcrContent`; status becomes `FINISHED`; and the hidden **AI Agent** posts a text reply to the image so all participants see it.
-
-**Why these choices.** On-demand (cost scales with usage, not participant count); first-tap-wins lock (one call per image regardless of taps); Markdown not HTML (output is data → no XSS surface); the result is both stored (`OcrContent`) and shown as an Agent reply (latecomers see it).
-
-**Acceptance.** The button appears only when text was detected; concurrent taps yield a single shared transcription; the transcription is saved to `OcrContent` and posted as an Agent reply rendered as Markdown; images with no text show no button (`TEXT_NOT_FOUND`).
-**Edge cases.** OCR failure/slowness never blocks normal chatting; on failure or timeout the status resets to `NOT_REQUESTED` so any participant can retry (the lock is transitional, not permanent).
-
-### F-7 · Conversation memory & summarization
+### F-6 · Conversation memory & summarization
 **Behavior.** The system maintains a background rolling summary per conversation (per-chunk summaries plus one evolving overall summary) so summaries are cheap and current. On request, a summary combines the overall memory with a fresh summary of messages since the last checkpoint. One endpoint serves three callers: the in-app "Summarize" action, the MCP `summarize_thread` tool, and the n8n daily digest.
 **Acceptance.** Summarization runs in the background and never blocks sending; an on-demand summary reflects messages up to the request moment; ChatGPT obtains the same summary via MCP.
 
@@ -202,21 +187,7 @@ flowchart TD
     Open --> Live["Send and receive messages in real time"]
 ```
 
-### 5.2 Collaborative OCR
-
-```mermaid
-flowchart TD
-    Send(["User sends an image"]) --> Show["Image shown to all members with<br/>'Extract text' (no AI call)"]
-    Show --> Tap{"Someone taps<br/>'Extract text'?"}
-    Tap -->|yes| Lock["First tap acquires the lock"]
-    Lock --> Disable["Disable the button for everyone (realtime)"]
-    Disable --> Vision["Vision model transcribes to Markdown (1 call)"]
-    Vision --> Post["AI Agent posts the result as a reply"]
-    Post --> SeeAll["All members see the transcription"]
-    Tap -->|no| NoCall["No AI call, no cost"]
-```
-
-### 5.3 Owner leaves a group
+### 5.2 Owner leaves a group
 
 ```mermaid
 flowchart TD
@@ -225,7 +196,7 @@ flowchart TD
     Choice -->|"Freeze"| Frz["owner_id = null<br/>no new joins; others chat or leave"]
 ```
 
-### 5.4 Request a thread summary
+### 5.3 Request a thread summary
 
 ```mermaid
 flowchart TD
@@ -279,7 +250,7 @@ A GitHub repo with the app, MCP server, and n8n workflow; a README enabling a fr
 | Requirement | Fulfilled by | Verified by |
 |---|---|---|
 | Cross-platform (§2.1) | React + TS PWA | Installable on desktop + mobile |
-| F-1…F-7 | Backend + client features | Acceptance criteria above |
+| F-1…F-6 | Backend + client features | Acceptance criteria above |
 | Create / join (F-3) | `POST /conversations`, `POST /conversations/join` (by PublicId) | Create-then-chat, join-then-see-history |
 | MCP (§6.1) | MCP server + tools | ChatGPT lists / summarizes / joins |
 | n8n (§6.2) | `workflow.json` | Web page + Google Sheet updated |
