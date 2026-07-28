@@ -16,18 +16,6 @@ public interface IConversationNotifier
     Task NotifyMemberChangedAsync(Guid conversationId, Guid userId, MemberChangeAction action, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Broadcasts that collaborative OCR has started on <paramref name="imageMessageId"/>, so every
-    /// client permanently disables its "Extract text" button for this image.
-    /// </summary>
-    Task NotifyOcrStartedAsync(Guid imageMessageId, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Broadcasts that collaborative OCR finished on <paramref name="imageMessageId"/>; the Agent's
-    /// reply message has already been broadcast separately via <see cref="NotifyNewMessageAsync"/>.
-    /// </summary>
-    Task NotifyOcrDoneAsync(Guid imageMessageId, CancellationToken cancellationToken);
-
-    /// <summary>
     /// Relays an n8n-published digest to whatever page/channel displays it. The backend does not
     /// persist the digest — this is a pure relay.
     /// </summary>
