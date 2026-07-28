@@ -10,11 +10,11 @@ internal static class MessageMapper
     {
         TextMessage text => new MessageDto(
             text.Id, text.ConversationId, text.UserId, text.Type, text.RepliesToMessageId, text.SentAt,
-            Content: text.Content, ImageUrl: null, Caption: null, OcrStatus: null, OcrContent: null),
+            Content: text.Content, ImageUrl: null, Caption: null),
 
         ImageMessage image => new MessageDto(
             image.Id, image.ConversationId, image.UserId, image.Type, image.RepliesToMessageId, image.SentAt,
-            Content: null, ImageUrl: image.ImageUrl, Caption: image.Caption, OcrStatus: image.OcrStatus, OcrContent: image.OcrContent),
+            Content: null, ImageUrl: image.ImageUrl, Caption: image.Caption),
 
         _ => throw new InvalidOperationException($"Unknown message payload type: {message.GetType().Name}")
     };

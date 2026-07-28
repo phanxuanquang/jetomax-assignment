@@ -1,7 +1,6 @@
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
 using ChatApp.Domain.Entities;
-using ChatApp.Domain.Enums;
 using MediatR;
 
 namespace ChatApp.Application.Features.Messages.SendImage;
@@ -29,10 +28,9 @@ public sealed class Handler(
         """;
 
     /// <summary>
-    /// Runs the single on-send vision pass synchronously (caption + text-detection) with a short
-    /// timeout; on failure or timeout it falls back to no caption and <see cref="OcrStatus.NotRequested"/>
-    /// (assume text may be present and let a participant retry "Extract text" later) so the image still
-    /// sends (F-5's edge case: AI failure never blocks the message). Then persists the image message and broadcasts it.
+    /// Runs the single on-send vision pass synchronously (caption) with a short timeout; on failure
+    /// or timeout it falls back to no caption so the image still sends (F-5's edge case: AI failure
+    /// never blocks the message). Then persists the image message and broadcasts it.
     /// </summary>
     public async Task<Result<MessageDto>> Handle(Command request, CancellationToken cancellationToken)
     {
@@ -56,8 +54,7 @@ public sealed class Handler(
             ConversationId = conversation.Id,
             UserId = callerId,
             ImageUrl = request.ImageUrl,
-            Caption = imageAnalysis.Caption,
-            OcrStatus = imageAnalysis.ContainsText ? OcrStatus.NotRequested : OcrStatus.TextNotFound
+            Caption = imageAnalysis.Caption
         };
         db.Add(message);
         await db.SaveChangesAsync(cancellationToken);
