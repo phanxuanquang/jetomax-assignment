@@ -2,6 +2,7 @@ using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
 using ChatApp.Domain.Entities;
 using MediatR;
+using System.Security.Cryptography;
 
 namespace ChatApp.Application.Features.Conversations.Create;
 
@@ -107,7 +108,7 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
         {
             for (var i = 0; i < span.Length; i++)
             {
-                span[i] = PublicIdAlphabet[Random.Shared.Next(PublicIdAlphabet.Length)];
+                span[i] = PublicIdAlphabet[RandomNumberGenerator.GetInt32(PublicIdAlphabet.Length)];
             }
         });
 }
