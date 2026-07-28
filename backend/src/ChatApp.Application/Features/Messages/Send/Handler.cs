@@ -5,18 +5,18 @@ using MediatR;
 
 namespace ChatApp.Application.Features.Messages.Send;
 
-/// <summary>Handles <see cref="Command"/>.</summary>
+/// <summary>
+/// Handles <see cref="Command"/>. Persists and broadcasts only — never touches conversation memory
+/// (§6, A-1/B-2): the memory update runs detached, in its own DI scope, fired by the Api layer after
+/// this handler returns, via <see cref="Memory.ConversationMemoryService.RecordMessageAndProcessAsync"/>
+/// with this message's <see cref="Domain.Entities.TextMessage.Content"/> as the text to count.
+/// </summary>
 public sealed class Handler(
     IAppDbContext db,
     ICurrentUser currentUser,
-    ITokenCounter tokenCounter,
-    IMemoryQueue memoryQueue,
     IConversationNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
 {
-    /// <summary>
-    /// Persists the text message, accrues its token count onto the conversation's pending memory
-    /// counter, enqueues the conversation for the background summarizer, and broadcasts it.
-    /// </summary>
+    /// <summary>Persists the text message and broadcasts it.</summary>
     public async Task<Result<MessageDto>> Handle(Command request, CancellationToken cancellationToken)
     {
         var guard = await currentUser.EnsureCanSendAsync(request.ConversationId, cancellationToken);
@@ -35,11 +35,8 @@ public sealed class Handler(
             Content = request.Content
         };
         db.Add(message);
-
-        await tokenCounter.UpdatePendingTokensAsync(conversation.Id, request.Content, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
 
-        await memoryQueue.EnqueueAsync(conversation.Id, cancellationToken);
         await notifier.NotifyNewMessageAsync(conversation.Id, message, cancellationToken);
 
         return Result<MessageDto>.Success(MessageMapper.ToDto(message));

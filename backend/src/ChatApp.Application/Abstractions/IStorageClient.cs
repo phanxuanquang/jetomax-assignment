@@ -3,7 +3,8 @@ namespace ChatApp.Application.Abstractions;
 /// <summary>
 /// The port onto Supabase Storage. Uploads happen client-side directly to Storage (principle 2) —
 /// the backend never streams upload bytes. This port exists only for the backend to fetch an
-/// already-uploaded image's bytes when it needs to hand them to <see cref="IVisionService"/>.
+/// already-uploaded image's bytes when it needs to hand them to <see cref="IGenerativeAiService"/>'s
+/// byte-array overloads.
 /// </summary>
 public interface IStorageClient
 {
