@@ -1,5 +1,4 @@
 using ChatApp.Domain.Entities;
-using ChatApp.Infrastructure.Persistence.Conversions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -17,12 +16,5 @@ public sealed class ImageMessageConfiguration : IEntityTypeConfiguration<ImageMe
 
         builder.Property(m => m.ImageUrl).HasColumnName("image_url").IsRequired();
         builder.Property(m => m.Caption).HasColumnName("caption");
-
-        builder.Property(m => m.OcrStatus)
-            .HasColumnName("ocr_status")
-            .HasConversion<OcrStatusConverter>()
-            .IsRequired();
-
-        builder.Property(m => m.OcrContent).HasColumnName("ocr_content");
     }
 }
