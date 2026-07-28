@@ -156,11 +156,11 @@ Each feature: description, behavior, acceptance criteria, edge cases.
 ```mermaid
 flowchart TD
     Leave["Owner taps Leave"] --> Ask{"Choose"}
-    Ask -->|"Delete"| Del["Conversation soft-deleted (is_deleted = true)"]
+    Ask -->|"Delete"| Del["Conversation soft-deleted (is_deleted = true);<br/>notify all participants; owner's row removed too"]
     Ask -->|"Freeze"| Frz["owner_id = null · no new joins;<br/>participants may still chat or leave"]
 ```
 
-**Acceptance.** Only the owner can add/remove participants, rename, set readonly, transfer ownership, or delete — enforced server-side (not just hidden in the UI); a non-owner leaves freely; a frozen conversation blocks new joins but allows chatting and leaving.
+**Acceptance.** Only the owner can add/remove participants, rename, set readonly, transfer ownership, or delete — enforced server-side (not just hidden in the UI); a non-owner leaves freely; a frozen conversation blocks new joins but allows chatting and leaving. **On delete, all participants are notified in realtime and the owner's own participant row is removed** (decision B-5) so every client reacts immediately rather than only on refresh.
 **Edge cases.** A frozen conversation stays unmanaged (no owner) until... it remains frozen (owner chose freeze over transfer); a manual readonly can be cleared by a subsequent join crossing the 1↔2 boundary (accepted simplification).
 
 ### F-5 · Image messaging
@@ -174,7 +174,7 @@ flowchart TD
 **Why these choices.** On-demand (cost scales with usage, not participant count); first-tap-wins lock (one call per image regardless of taps); Markdown not HTML (output is data → no XSS surface); the result is both stored (`OcrContent`) and shown as an Agent reply (latecomers see it).
 
 **Acceptance.** The button appears only when text was detected; concurrent taps yield a single shared transcription; the transcription is saved to `OcrContent` and posted as an Agent reply rendered as Markdown; images with no text show no button (`TEXT_NOT_FOUND`).
-**Edge cases.** OCR failure/slowness never blocks normal chatting.
+**Edge cases.** OCR failure/slowness never blocks normal chatting; on failure or timeout the status resets to `NOT_REQUESTED` so any participant can retry (the lock is transitional, not permanent).
 
 ### F-7 · Conversation memory & summarization
 **Behavior.** The system maintains a background rolling summary per conversation (per-chunk summaries plus one evolving overall summary) so summaries are cheap and current. On request, a summary combines the overall memory with a fresh summary of messages since the last checkpoint. One endpoint serves three callers: the in-app "Summarize" action, the MCP `summarize_thread` tool, and the n8n daily digest.
