@@ -1,7 +1,7 @@
 using ChatApp.Application.Common.Results;
 using MediatR;
 
-namespace ChatApp.Application.Features.Conversations.GetActiveConversations;
+namespace ChatApp.Application.Features.Conversations.Get;
 
 /// <summary>
 /// Lists the caller's conversations, ordered by recency. An empty/null <see cref="SearchTerm"/>

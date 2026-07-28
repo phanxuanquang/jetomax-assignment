@@ -21,8 +21,6 @@ public sealed class ConversationMemoryService(IAppDbContext db, IGenerativeAiSer
     /// memory, and resets the counter. A no-op if the conversation has no memory row. This method is
     /// stateless with respect to any ambient request and safe to call from a freshly opened DI scope;
     /// it does not open that scope itself — the caller (Api's send-triggered detached task) is
-    /// responsible for resolving its own <see cref="IAppDbContext"/>/<see cref="IGenerativeAiService"/>
-    /// instances from a fresh scope, exactly as <see cref="IOcrService.ProcessAsync"/> must for OCR.
     /// </summary>
     public async Task RecordMessageAndProcessAsync(Guid conversationId, string messageText, int thresholdTokens, CancellationToken cancellationToken)
     {

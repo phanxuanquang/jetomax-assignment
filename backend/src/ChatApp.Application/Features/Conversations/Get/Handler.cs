@@ -4,7 +4,7 @@ using ChatApp.Domain.Entities;
 using MediatR;
 using System.Collections.Frozen;
 
-namespace ChatApp.Application.Features.Conversations.GetActiveConversations;
+namespace ChatApp.Application.Features.Conversations.Get;
 
 /// <summary>Handles <see cref="Query"/>.</summary>
 public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess)

@@ -20,6 +20,7 @@ public sealed class Handler(
     IConversationNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
 {
     private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(8);
+    private sealed record ImageAnalysis(string? Caption, bool ContainsText);
 
     private const string AnalysisPrompt = """
         Look at this image and respond with two things: a short, one-sentence caption describing
@@ -48,15 +49,15 @@ public sealed class Handler(
 
         var conversation = guard.Value!;
 
-        var (caption, ocrStatus) = await AnalyzeImageAsync(request.ImageUrl, cancellationToken);
+        var imageAnalysis = await AnalyzeImageAsync(request.ImageUrl, cancellationToken);
 
         var message = new ImageMessage
         {
             ConversationId = conversation.Id,
             UserId = callerId,
             ImageUrl = request.ImageUrl,
-            Caption = caption,
-            OcrStatus = ocrStatus
+            Caption = imageAnalysis.Caption,
+            OcrStatus = imageAnalysis.ContainsText ? OcrStatus.NotRequested : OcrStatus.TextNotFound
         };
         db.Add(message);
         await db.SaveChangesAsync(cancellationToken);
@@ -66,7 +67,7 @@ public sealed class Handler(
         return Result<MessageDto>.Success(MessageMapper.ToDto(message));
     }
 
-    private async Task<(string? Caption, OcrStatus Status)> AnalyzeImageAsync(string imageUrl, CancellationToken cancellationToken)
+    private async Task<ImageAnalysis> AnalyzeImageAsync(string imageUrl, CancellationToken cancellationToken)
     {
         try
         {
@@ -74,12 +75,11 @@ public sealed class Handler(
             timeoutCts.CancelAfter(VisionTimeout);
 
             var bytes = await storageClient.DownloadAsync(imageUrl, timeoutCts.Token);
-            var analysis = await generativeAiService.GenerateContentFromImageAsync<ImageAnalysis>(AnalysisPrompt, bytes, cancellationToken: timeoutCts.Token);
-            return (analysis.Caption, analysis.ContainsText ? OcrStatus.NotRequested : OcrStatus.TextNotFound);
+            return await generativeAiService.GenerateContentFromImageAsync<ImageAnalysis>(AnalysisPrompt, bytes, cancellationToken: timeoutCts.Token);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            return (null, OcrStatus.NotRequested);
+            return new ImageAnalysis(null, false);
         }
     }
 }
