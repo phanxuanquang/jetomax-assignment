@@ -37,6 +37,13 @@ Reference: [Building MCP servers for ChatGPT / connectors](https://platform.open
 
 The MCP server authenticates each ChatGPT user, then calls the backend with the **`Mcp` service credential** plus the on-behalf-of user id, so the backend applies the same per-user membership/ownership rules. It may call only endpoints whose `[AllowedClients]` includes `Mcp` (list/search conversations, join, summarize).
 
+**Concrete header shape (as implemented in `ChatApp.Api`):**
+```
+X-Client-Key: <Clients:McpKey value>
+X-On-Behalf-Of: <userId>
+```
+`X-Client-Key` resolves the caller to the `Mcp` client type; `X-On-Behalf-Of` carries the user id the request acts as (n8n's endpoints are system-wide and never send this header — n8n's `UserId` is `null` by design).
+
 ## Open items (later)
 
 - MCP server project skeleton (`ChatApp.Mcp`) and hosting (Vercel / Railway).

@@ -52,21 +52,25 @@ supabase start           # boots the full stack in Docker
 `supabase start` prints your local credentials — copy these:
 - **API URL** (e.g. `http://127.0.0.1:54321`)
 - **anon key** and **service_role key**
-- **JWT secret**
 - Studio URL (e.g. `http://127.0.0.1:54323`)
+
+> You do **not** need to copy a JWT secret — see the note below on how the backend validates tokens.
 
 Docs: https://supabase.com/docs/guides/local-development
 
 ### Option B — Hosted project (for staging / sharing)
 1. Create a project at https://supabase.com/dashboard.
 2. **Project Settings → API**: copy the **Project URL**, **anon** key, and **service_role** key.
-3. **Project Settings → API → JWT Settings**: copy the **JWT secret** (used by the backend to validate tokens).
+
+> You do **not** need to copy a JWT secret — see the note below.
 
 ### Storage bucket (both options)
 Create a bucket named **`images`** for chat images (Studio → Storage → New bucket). Keep it private. **The client (frontend) uploads images directly and issues its own signed URLs** via the Supabase client — the backend never streams image bytes on the message path. The backend's `IStorageClient` has a single job: **download an object's bytes with the service-role key** so the Gemini vision call (caption / OCR) can read a private image without depending on a client-supplied signed URL that may have expired. Docs: https://supabase.com/docs/guides/storage
 
 ### Auth (both options)
 Enable **Email** sign-in (Studio → Authentication → Providers). The user's `username` is passed in sign-up metadata and copied into `profiles` by the `handle_new_user` trigger in `schema.sql`. Docs: https://supabase.com/docs/guides/auth
+
+> **How the backend validates tokens (updated — no static secret needed).** Supabase Auth now defaults new projects — and recent Supabase CLI versions default local dev too — to **asymmetric JWT signing** (ES256), not the legacy shared HS256 secret. Copying a "JWT secret" and validating locally against it (the old approach) can silently stop matching the actual signing key. Instead, the **Api** validates tokens against Supabase's **JWKS endpoint** (`{Supabase:Url}/auth/v1/.well-known/jwks.json` — confirm the exact path for your Supabase version), which exposes the current public signing key(s) and works whether the project uses the new asymmetric keys or the legacy HS256 secret (Supabase publishes the legacy secret there too, as a symmetric JWK, for backward compatibility). This needs only `Supabase:Url` — no separate secret to copy or store. Reference: [JWT Signing Keys](https://supabase.com/docs/guides/auth/signing-keys).
 
 ---
 
@@ -99,7 +103,6 @@ cd src/ChatApp.Api
 dotnet user-secrets init
 dotnet user-secrets set "Supabase:Url"            "<API URL>"
 dotnet user-secrets set "Supabase:ServiceRoleKey" "<service_role key>"
-dotnet user-secrets set "Supabase:JwtSecret"      "<JWT secret>"
 dotnet user-secrets set "Supabase:StorageBucket"  "images"
 dotnet user-secrets set "ConnectionStrings:Postgres" "<Postgres connection string — see note below>"
 dotnet user-secrets set "Gemini:ApiKey"           "<google ai studio key>"
@@ -168,7 +171,7 @@ If all six pass, the environment is correctly wired.
 | `Supabase:Url` | Supabase API URL |
 | `Supabase:ServiceRoleKey` | Service role key (server-only). The backend **must** use a role that bypasses RLS — with an RLS-subject role, `auth.uid()` is `NULL` and every query returns zero rows silently |
 | `ConnectionStrings:Postgres` | The **actual Postgres connection string** (Project Settings → Database), used by `AppDbContext`/Npgsql. Not the same credential as `ServiceRoleKey` — that's a JWT for REST APIs, not a DB password |
-| `Supabase:JwtSecret` | Secret to validate user JWTs |
+
 | `Supabase:StorageBucket` | `images` |
 | `Gemini:ApiKey` / `Gemini:Model` | Google AI Studio key / `gemini-2.5-flash` |
 | `Clients:McpKey` / `Clients:N8nKey` | Service keys mapping callers to `Mcp` / `N8n` client types |
