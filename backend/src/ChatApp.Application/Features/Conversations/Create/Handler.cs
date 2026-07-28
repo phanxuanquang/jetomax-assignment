@@ -6,7 +6,7 @@ using MediatR;
 namespace ChatApp.Application.Features.Conversations.Create;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
+public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess)
     : IRequestHandler<Command, Result<ConversationDto>>
 {
     private const string PublicIdAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -16,11 +16,12 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
     /// <summary>
     /// Validates the other participants exist, generates a unique <c>PublicId</c> and initial
     /// <c>DisplayName</c>, and creates the conversation with the caller as owner alongside its
-    /// owner/other participant rows and empty memory row.
+    /// owner/other participant rows and empty memory row (decision A-3: this handler is the sole
+    /// writer of that create-time bookkeeping — there is no DB trigger for it).
     /// </summary>
     public async Task<Result<ConversationDto>> Handle(Command request, CancellationToken cancellationToken)
     {
-        var ownerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
+        var ownerResult = await conversationAccess.GetCurrentUserAsync(cancellationToken);
         if (!ownerResult.IsSuccess)
         {
             return Result<ConversationDto>.Failure(ownerResult.Error!);

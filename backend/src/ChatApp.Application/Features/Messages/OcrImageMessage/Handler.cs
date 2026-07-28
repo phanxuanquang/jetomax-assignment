@@ -8,7 +8,7 @@ namespace ChatApp.Application.Features.Messages.OcrImageMessage;
 /// <summary>Handles <see cref="Command"/>.</summary>
 public sealed class Handler(
     IAppDbContext db,
-    ICurrentUser currentUser,
+    IConversationAccess conversationAccess,
     IConversationNotifier notifier,
     IOcrService ocrService) : IRequestHandler<Command, Result>
 {
@@ -19,13 +19,10 @@ public sealed class Handler(
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
-        if (!callerResult.IsSuccess)
+        if (conversationAccess.UserId is not { } callerId)
         {
-            return Result.Failure(callerResult.Error!);
+            return Result.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
         }
-
-        var callerId = callerResult.Value!.Id;
 
         var image = await db.FirstOrDefaultAsync(
             db.Messages.OfType<ImageMessage>().Where(m => m.Id == request.MessageId),

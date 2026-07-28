@@ -14,7 +14,7 @@ namespace ChatApp.Application.Features.Messages.SendImage;
 /// </summary>
 public sealed class Handler(
     IAppDbContext db,
-    ICurrentUser currentUser,
+    IConversationAccess conversationAccess,
     IStorageClient storageClient,
     IGenerativeAiService generativeAiService,
     IConversationNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
@@ -35,14 +35,18 @@ public sealed class Handler(
     /// </summary>
     public async Task<Result<MessageDto>> Handle(Command request, CancellationToken cancellationToken)
     {
-        var guard = await currentUser.EnsureCanSendAsync(request.ConversationId, cancellationToken);
+        if (conversationAccess.UserId is not { } callerId)
+        {
+            return Result<MessageDto>.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
+        }
+
+        var guard = await conversationAccess.EnsureCanSendAsync(request.ConversationId, cancellationToken);
         if (!guard.IsSuccess)
         {
             return Result<MessageDto>.Failure(guard.Error!);
         }
 
         var conversation = guard.Value!;
-        var callerId = (await currentUser.GetCurrentUserAsync(cancellationToken)).Value!.Id;
 
         var (caption, ocrStatus) = await AnalyzeImageAsync(request.ImageUrl, cancellationToken);
 

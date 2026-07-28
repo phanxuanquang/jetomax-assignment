@@ -5,13 +5,13 @@ using MediatR;
 namespace ChatApp.Application.Features.Conversations.TransferOwnership;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
+public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess)
     : IRequestHandler<Command, Result>
 {
     /// <summary>Owner-only: transfers ownership to <see cref="Command.NewOwnerUserId"/>, who must already be a participant.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var guard = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
+        var guard = await conversationAccess.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
         if (!guard.IsSuccess)
         {
             return Result.Failure(guard.Error!);

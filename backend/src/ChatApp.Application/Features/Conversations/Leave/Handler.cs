@@ -5,7 +5,7 @@ using MediatR;
 namespace ChatApp.Application.Features.Conversations.Leave;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConversationNotifier notifier)
+public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess, IConversationNotifier notifier)
     : IRequestHandler<Command, Result>
 {
     /// <summary>
@@ -16,13 +16,10 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var currentUserResult = await currentUser.GetCurrentUserAsync(cancellationToken);
-        if (!currentUserResult.IsSuccess)
+        if (conversationAccess.UserId is not { } currentUserId)
         {
-            return Result.Failure(currentUserResult.Error!);
+            return Result.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
         }
-
-        var currentUserId = currentUserResult.Value!.Id;
 
         var conversation = await db.FirstOrDefaultAsync(
             db.Conversations.Where(c => c.Id == request.ConversationId && !c.IsDeleted),

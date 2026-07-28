@@ -6,7 +6,7 @@ using System.Collections.Frozen;
 namespace ChatApp.Application.Features.Conversations.RemoveParticipants;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConversationNotifier notifier)
+public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess, IConversationNotifier notifier)
     : IRequestHandler<Command, Result>
 {
     /// <summary>
@@ -17,7 +17,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var getOwnedConversationResult = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
+        var getOwnedConversationResult = await conversationAccess.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
         if (!getOwnedConversationResult.IsSuccess)
         {
             return Result.Failure(getOwnedConversationResult.Error!);

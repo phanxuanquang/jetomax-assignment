@@ -7,7 +7,7 @@ using System.Collections.Frozen;
 namespace ChatApp.Application.Features.Conversations.GetActiveConversations;
 
 /// <summary>Handles <see cref="Query"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
+public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess)
     : IRequestHandler<Query, Result<IReadOnlyList<ConversationDto>>>
 {
     /// <summary>
@@ -17,13 +17,10 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
     /// </summary>
     public async Task<Result<IReadOnlyList<ConversationDto>>> Handle(Query request, CancellationToken cancellationToken)
     {
-        var currentUserResult = await currentUser.GetCurrentUserAsync(cancellationToken);
-        if (!currentUserResult.IsSuccess)
+        if (conversationAccess.UserId is not { } currentUserId)
         {
-            return Result<IReadOnlyList<ConversationDto>>.Failure(currentUserResult.Error!);
+            return Result<IReadOnlyList<ConversationDto>>.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
         }
-
-        var currentUserId = currentUserResult.Value!.Id;
 
         IQueryable<Conversation> query = db.Conversations
             .Where(c => !c.IsDeleted)

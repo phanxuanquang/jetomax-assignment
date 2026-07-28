@@ -6,7 +6,7 @@ using MediatR;
 namespace ChatApp.Application.Features.Conversations.AddParticipants;
 
 /// <summary>Handles <see cref="Command"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConversationNotifier notifier)
+public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess, IConversationNotifier notifier)
     : IRequestHandler<Command, Result>
 {
     /// <summary>
@@ -17,7 +17,7 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser, IConvers
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var guard = await currentUser.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
+        var guard = await conversationAccess.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
         if (!guard.IsSuccess)
         {
             return Result.Failure(guard.Error!);

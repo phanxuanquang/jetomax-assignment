@@ -5,19 +5,16 @@ using MediatR;
 namespace ChatApp.Application.Features.Messages.Get;
 
 /// <summary>Handles <see cref="Query"/>.</summary>
-public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
+public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess)
     : IRequestHandler<Query, Result<IReadOnlyList<MessageDto>>>
 {
     /// <summary>Returns up to <see cref="Query.Limit"/> messages, newest first, strictly older than <see cref="Query.Before"/> when given.</summary>
     public async Task<Result<IReadOnlyList<MessageDto>>> Handle(Query request, CancellationToken cancellationToken)
     {
-        var callerResult = await currentUser.GetCurrentUserAsync(cancellationToken);
-        if (!callerResult.IsSuccess)
+        if (conversationAccess.UserId is not { } callerId)
         {
-            return Result<IReadOnlyList<MessageDto>>.Failure(callerResult.Error!);
+            return Result<IReadOnlyList<MessageDto>>.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
         }
-
-        var callerId = callerResult.Value!.Id;
 
         var isParticipant = await db.AnyAsync(
             db.Participants.Where(p => p.ConversationId == request.ConversationId && p.UserId == callerId),
