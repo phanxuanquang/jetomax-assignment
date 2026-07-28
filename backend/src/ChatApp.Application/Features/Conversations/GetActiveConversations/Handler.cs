@@ -31,8 +31,8 @@ public sealed class Handler(IAppDbContext db, ICurrentUser currentUser)
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {
-            var term = request.SearchTerm.ToLowerInvariant().Trim();
-            query = query.Where(c => c.DisplayName.Contains(term, StringComparison.CurrentCultureIgnoreCase));
+            var pattern = $"%{request.SearchTerm.Trim()}%";
+            query = query.Where(c => db.ILike(c.DisplayName, pattern));
         }
 
         query = query.OrderByDescending(c => c.LastMessageTime);

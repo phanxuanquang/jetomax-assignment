@@ -53,6 +53,16 @@ public interface IAppDbContext
     /// <summary>Asynchronously executes <paramref name="query"/> and returns whether it has any results.</summary>
     Task<bool> AnyAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// A case-insensitive substring match usable inside a LINQ predicate passed to one of this
+    /// context's <see cref="IQueryable{T}"/> sources (e.g. <c>db.Conversations.Where(c =&gt;
+    /// db.ILike(c.DisplayName, term))</c>). Infrastructure translates this to a DB-native operator
+    /// (e.g. Postgres's <c>ILIKE</c> via <c>EF.Functions.ILike</c>) so the filter runs in SQL rather
+    /// than pulling every row into memory — <c>string.Contains(text, StringComparison...)</c> does
+    /// not translate and must not be used here.
+    /// </summary>
+    bool ILike(string value, string pattern);
+
     /// <summary>Persists every pending add/remove and property change, returning the number of affected rows.</summary>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
