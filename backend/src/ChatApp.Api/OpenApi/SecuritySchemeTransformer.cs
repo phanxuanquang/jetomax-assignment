@@ -34,7 +34,7 @@ public sealed class SecuritySchemeTransformer : IOpenApiDocumentTransformer
             Type = SecuritySchemeType.ApiKey,
             In = ParameterLocation.Header,
             Name = "X-Client-Key",
-            Description = "Mcp/N8n client: Clients:McpKey or Clients:N8nKey."
+            Description = "MCP/n8n client: Clients:McpKey or Clients:N8nKey."
         };
 
         document.Components.SecuritySchemes[OnBehalfOfScheme] = new OpenApiSecurityScheme
@@ -42,7 +42,7 @@ public sealed class SecuritySchemeTransformer : IOpenApiDocumentTransformer
             Type = SecuritySchemeType.ApiKey,
             In = ParameterLocation.Header,
             Name = "X-On-Behalf-Of",
-            Description = "Mcp client only, alongside X-Client-Key: the user id the call acts on behalf of."
+            Description = "MCP client only, alongside X-Client-Key: the user ID that the call acts on behalf of."
         };
 
         // Three alternatives, matching the three real caller shapes: App (Bearer alone), N8n

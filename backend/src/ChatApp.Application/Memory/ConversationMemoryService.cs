@@ -131,8 +131,6 @@ public sealed class ConversationMemoryService(IAppDbContext db, IGenerativeAiSer
             }
         }
 
-        // No chunk yet, or the pointer message was removed (replies_to-style FK set null elsewhere):
-        // fall back to the conversation's full history.
         return await db.ToListAsync(
             db.Messages.Where(m => m.ConversationId == conversationId).OrderBy(m => m.SentAt),
             cancellationToken);
@@ -148,7 +146,10 @@ public sealed class ConversationMemoryService(IAppDbContext db, IGenerativeAiSer
             numbers, and negations (things explicitly ruled out or denied).
 
             Current overall memory (may be empty for a brand-new conversation):
+            
+            ```markdown
             {currentGlobalMemory}
+            ```
 
             New messages to summarize:
             {transcript}
@@ -167,7 +168,10 @@ public sealed class ConversationMemoryService(IAppDbContext db, IGenerativeAiSer
             is folded in over time.
 
             Existing overall summary (may be empty):
+            
+            ```markdown
             {currentGlobalMemory}
+            ```
 
             New summary to fold in:
             {newSummary}

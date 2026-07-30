@@ -20,17 +20,17 @@ public interface IGenerativeAiService
     /// <typeparamref name="T"/> (typically <see cref="string"/>, or a structured type when the
     /// prompt asks for one). The caller owns the prompt contract that makes <typeparamref name="T"/> valid.
     /// </summary>
-    Task<T> GenerateContentAsync<T>(string prompt, double temp = 1.0, CancellationToken cancellationToken = default);
+    Task<T> GenerateContentAsync<T>(string prompt, string? systemInstruction = null, double temp = 1.0, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Generates content from <paramref name="prompt"/> grounded in the image at
     /// <paramref name="imageAsBytes"/>, returning it shaped as <typeparamref name="T"/>.
     /// </summary>
-    Task<T> GenerateContentFromImageAsync<T>(string prompt, byte[] imageAsBytes, double temp = 1.0, CancellationToken cancellationToken = default);
+    Task<T> GenerateContentFromImageAsync<T>(string prompt, byte[] imageAsBytes, string? systemInstruction = null, double temp = 1.0, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Generates content from <paramref name="prompt"/> grounded in the image at
     /// <paramref name="imageUrl"/>, returning it shaped as <typeparamref name="T"/>.
     /// </summary>
-    Task<T> GenerateContentFromImageAsync<T>(string prompt, string imageUrl, double temp = 1.0, CancellationToken cancellationToken = default);
+    Task<T> GenerateContentFromImageAsync<T>(string prompt, string imageUrl, string? systemInstruction = null, double temp = 1.0, CancellationToken cancellationToken = default);
 }

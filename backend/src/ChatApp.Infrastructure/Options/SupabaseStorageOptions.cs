@@ -1,9 +1,10 @@
-namespace ChatApp.Infrastructure.Storage;
+namespace ChatApp.Infrastructure.Options;
 
-/// <summary>Binds the <c>Supabase</c> configuration section (see <c>prerequisite-setups.md</c>).</summary>
 public sealed class SupabaseStorageOptions
 {
-    /// <summary>Supabase project API URL, e.g. <c>http://127.0.0.1:54321</c>.</summary>
+    /// <summary>
+    /// Supabase project API URL, e.g. <c>http://127.0.0.1:54321</c>.
+    /// </summary>
     public required string Url { get; init; }
 
     /// <summary>
@@ -12,7 +13,5 @@ public sealed class SupabaseStorageOptions
     /// time the backend needs the bytes for a vision call.
     /// </summary>
     public required string ServiceRoleKey { get; init; }
-
-    /// <summary>Name of the private bucket chat images live in, e.g. <c>images</c>.</summary>
     public required string StorageBucket { get; init; }
 }

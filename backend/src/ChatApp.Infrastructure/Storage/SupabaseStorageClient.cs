@@ -1,4 +1,5 @@
 using ChatApp.Application.Abstractions;
+using ChatApp.Infrastructure.Options;
 using Microsoft.Extensions.Options;
 
 namespace ChatApp.Infrastructure.Storage;

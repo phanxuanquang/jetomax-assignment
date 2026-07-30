@@ -24,7 +24,7 @@ public sealed class ChatHub(
     IAppDbContext db,
     IUserConnectionTracker connectionTracker,
     IServiceScopeFactory scopeFactory,
-    IOptions<MemoryOptions> memoryOptions,
+    IOptions<ConversationMemoryOptions> memoryOptions,
     ILogger<ChatHub> logger) : Hub
 {
     /// <summary>Adds the connection to a Group per conversation the caller currently participates in (§5) — see the "Group membership" design note.</summary>
@@ -114,14 +114,6 @@ public sealed class ChatHub(
                 logger.LogError(ex, "Detached memory update failed for conversation {ConversationId}", conversationId);
             }
         });
-    }
-
-    private static void ThrowIfFailed(Result result)
-    {
-        if (!result.IsSuccess)
-        {
-            throw new HubException($"{result.Error!.Code}: {result.Error.Message}");
-        }
     }
 
     private static void ThrowIfFailed<T>(Result<T> result)

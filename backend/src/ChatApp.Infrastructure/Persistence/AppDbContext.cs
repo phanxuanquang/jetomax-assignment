@@ -19,7 +19,7 @@ namespace ChatApp.Infrastructure.Persistence;
 /// connection role first.
 /// </para>
 /// </summary>
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IAppDbContext
+internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IAppDbContext
 {
     public IQueryable<User> Users => Set<User>();
 
