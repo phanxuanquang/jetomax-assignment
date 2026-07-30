@@ -1,4 +1,6 @@
 using ChatApp.Api.Auth;
+using ChatApp.Api.DTOs;
+using ChatApp.Api.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

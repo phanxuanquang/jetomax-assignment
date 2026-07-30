@@ -1,3 +1,3 @@
-namespace ChatApp.Api.Controllers;
+namespace ChatApp.Api.DTOs;
 
 public sealed record PublishDigestRequest(string Digest, DateTime PublishedAt);

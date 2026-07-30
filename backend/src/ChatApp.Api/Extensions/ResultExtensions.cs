@@ -1,7 +1,7 @@
 using ChatApp.Application.Common.Results;
 using Microsoft.AspNetCore.Mvc;
 
-namespace ChatApp.Api.Controllers;
+namespace ChatApp.Api.Extensions;
 
 /// <summary>Maps an Application <see cref="Result"/>/<see cref="Result{T}"/> to the matching HTTP outcome (§4.3).</summary>
 internal static class ResultExtensions

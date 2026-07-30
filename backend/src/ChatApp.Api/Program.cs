@@ -7,6 +7,7 @@ using ChatApp.Application;
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Memory;
 using ChatApp.Infrastructure;
+using Microsoft.Extensions.FileProviders;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
 
@@ -49,7 +50,14 @@ builder.Services.AddScoped<IConversationAccess, ConversationAccess>();
 builder.Services.AddSingleton<IUserConnectionTracker, UserConnectionTracker>();
 builder.Services.AddScoped<IConversationNotifier, SignalRConversationNotifier>();
 
-builder.Services.AddSignalR();
+// SignalR's Hub protocol has its own independent JSON serializer options — it does NOT inherit
+// AddControllers().AddJsonOptions() above, so without this, MessageType/enum fields broadcast over
+// the hub serialize as raw integers while the identical DTO shape serializes as strings ("Text") over
+// REST. Found by testing the mock frontend: a realtime-pushed text message rendered as a broken
+// image because its numeric type didn't match the "Text"/"Image" string comparison the UI (correctly)
+// writes against the documented wire contract.
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.AddExceptionHandler<PostgresExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -65,6 +73,18 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+
+    // Serves backend/frontend-mock-test/ (a sibling of src/, not part of this project's own
+    // wwwroot) at /mock-test, same-origin with the API so the PM's browser can call REST + the
+    // SignalR hub with zero CORS configuration — just `dotnet run` then open /mock-test/. Dev-only:
+    // this is a QA tool, not something to ship.
+    var mockFrontendPath = Path.Combine(app.Environment.ContentRootPath, "..", "..", "frontend-mock-test");
+    if (Directory.Exists(mockFrontendPath))
+    {
+        var mockFileProvider = new PhysicalFileProvider(Path.GetFullPath(mockFrontendPath));
+        app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = mockFileProvider, RequestPath = "/mock-test" });
+        app.UseStaticFiles(new StaticFileOptions { FileProvider = mockFileProvider, RequestPath = "/mock-test" });
+    }
 }
 
 app.UseExceptionHandler();
