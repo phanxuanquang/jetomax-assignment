@@ -42,16 +42,16 @@ public interface IAppDbContext
     void RemoveRange<TEntity>(IEnumerable<TEntity> entities) where TEntity : class;
 
     /// <summary>Asynchronously executes <paramref name="query"/> and returns its first result, or null if empty.</summary>
-    Task<TEntity?> FirstOrDefaultAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken);
+    Task<TEntity?> FirstOrDefaultAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken = default);
 
     /// <summary>Asynchronously executes <paramref name="query"/> and materializes every result.</summary>
-    Task<List<TEntity>> ToListAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken);
+    Task<List<TEntity>> ToListAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken = default);
 
     /// <summary>Asynchronously executes <paramref name="query"/> and returns how many results it has.</summary>
-    Task<int> CountAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken);
+    Task<int> CountAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken = default);
 
     /// <summary>Asynchronously executes <paramref name="query"/> and returns whether it has any results.</summary>
-    Task<bool> AnyAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken);
+    Task<bool> AnyAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// A case-insensitive substring match usable inside a LINQ predicate passed to one of this
@@ -64,5 +64,5 @@ public interface IAppDbContext
     bool ILike(string value, string pattern);
 
     /// <summary>Persists every pending add/remove and property change, returning the number of affected rows.</summary>
-    Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

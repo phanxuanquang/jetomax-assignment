@@ -41,16 +41,16 @@ internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbC
 
     public void RemoveRange<TEntity>(IEnumerable<TEntity> entities) where TEntity : class => Set<TEntity>().RemoveRange(entities);
 
-    public Task<TEntity?> FirstOrDefaultAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken) =>
+    public Task<TEntity?> FirstOrDefaultAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken = default) =>
         Rewrite(query).FirstOrDefaultAsync(cancellationToken);
 
-    public Task<List<TEntity>> ToListAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken) =>
+    public Task<List<TEntity>> ToListAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken = default) =>
         Rewrite(query).ToListAsync(cancellationToken);
 
-    public Task<int> CountAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken) =>
+    public Task<int> CountAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken = default) =>
         Rewrite(query).CountAsync(cancellationToken);
 
-    public Task<bool> AnyAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken) =>
+    public Task<bool> AnyAsync<TEntity>(IQueryable<TEntity> query, CancellationToken cancellationToken = default) =>
         Rewrite(query).AnyAsync(cancellationToken);
 
     /// <summary>

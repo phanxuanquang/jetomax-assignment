@@ -18,10 +18,10 @@ public sealed class SignalRConversationNotifier(IHubContext<ChatHub> hubContext,
     /// <summary>The SignalR Group name for <paramref name="conversationId"/>.</summary>
     public static string GroupName(Guid conversationId) => conversationId.ToString();
 
-    public Task NotifyNewMessageAsync(Guid conversationId, Message message, CancellationToken cancellationToken) =>
+    public Task NotifyNewMessageAsync(Guid conversationId, Message message, CancellationToken cancellationToken = default) =>
         hubContext.Clients.Group(GroupName(conversationId)).SendAsync("NewMessage", ToMessageDto(message), cancellationToken);
 
-    public async Task NotifyMemberChangedAsync(Guid conversationId, Guid userId, MemberChangeAction action, CancellationToken cancellationToken)
+    public async Task NotifyMemberChangedAsync(Guid conversationId, Guid userId, MemberChangeAction action, CancellationToken cancellationToken = default)
     {
         var group = GroupName(conversationId);
 
@@ -43,7 +43,7 @@ public sealed class SignalRConversationNotifier(IHubContext<ChatHub> hubContext,
         await hubContext.Clients.Group(group).SendAsync("MemberChanged", conversationId, userId, ToWireAction(action), cancellationToken);
     }
 
-    public Task NotifyDigestPublishedAsync(string digest, DateTime publishedAt, CancellationToken cancellationToken) =>
+    public Task NotifyDigestPublishedAsync(string digest, DateTime publishedAt, CancellationToken cancellationToken = default) =>
         hubContext.Clients.All.SendAsync("DigestPublished", digest, publishedAt, cancellationToken);
 
     /// <summary>Maps Application's <see cref="MemberChangeAction"/> to §9.1's documented wire values (<c>Added</c>/<c>Left</c>).</summary>

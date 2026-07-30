@@ -22,7 +22,7 @@ namespace ChatApp.Api.Controllers;
 public sealed class InternalController(ISender sender) : ControllerBase
 {
     [HttpGet("conversations")]
-    public async Task<IActionResult> GetAllConversations(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAllConversations(CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new GetAllConversationsFeature.Query(), cancellationToken);
         return result.ToActionResult();
@@ -36,7 +36,7 @@ public sealed class InternalController(ISender sender) : ControllerBase
     }
 
     [HttpPost("digest")]
-    public async Task<IActionResult> PublishDigest([FromBody] PublishDigestRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> PublishDigest([FromBody] PublishDigestRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new PublishDigestFeature.Command(request.Digest, request.PublishedAt), cancellationToken);
         return result.ToActionResult();

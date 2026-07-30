@@ -9,5 +9,5 @@ namespace ChatApp.Application.Abstractions;
 public interface IStorageClient
 {
     /// <summary>Downloads the raw bytes of the image at <paramref name="imageUrl"/>.</summary>
-    Task<byte[]> DownloadAsync(string imageUrl, CancellationToken cancellationToken);
+    Task<byte[]> DownloadAsync(string imageUrl, CancellationToken cancellationToken = default);
 }

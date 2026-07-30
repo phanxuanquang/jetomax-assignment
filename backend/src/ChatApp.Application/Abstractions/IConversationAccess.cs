@@ -26,7 +26,7 @@ public interface IConversationAccess
     /// caller-facing rejection. Use this only when more than the id is needed (e.g. <c>Username</c>
     /// for display-name generation); prefer <see cref="UserId"/> directly otherwise.
     /// </summary>
-    Task<Result<User>> GetCurrentUserAsync(CancellationToken cancellationToken);
+    Task<Result<User>> GetCurrentUserAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Loads the non-deleted conversation <paramref name="conversationId"/> and confirms the caller
@@ -35,7 +35,7 @@ public interface IConversationAccess
     /// exist (or is deleted). Backs the owner-only commands (Rename, SetReadonly, TransferOwnership,
     /// AddParticipants, RemoveParticipants).
     /// </summary>
-    Task<Result<Conversation>> GetOwnedConversationAsync(Guid conversationId, CancellationToken cancellationToken);
+    Task<Result<Conversation>> GetOwnedConversationAsync(Guid conversationId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Loads the non-deleted conversation <paramref name="conversationId"/> and confirms the caller
@@ -43,5 +43,5 @@ public interface IConversationAccess
     /// its owner (F-4). Fails with <see cref="ErrorType.Forbidden"/>/<see cref="ErrorType.NotFound"/>/
     /// <see cref="ErrorType.Conflict"/> accordingly. Backs <c>Send</c>/<c>SendImage</c>.
     /// </summary>
-    Task<Result<Conversation>> EnsureCanSendAsync(Guid conversationId, CancellationToken cancellationToken);
+    Task<Result<Conversation>> EnsureCanSendAsync(Guid conversationId, CancellationToken cancellationToken = default);
 }

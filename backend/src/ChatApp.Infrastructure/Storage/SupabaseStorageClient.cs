@@ -24,7 +24,7 @@ public sealed class SupabaseStorageClient : IStorageClient
         _httpClient = httpClient;
     }
 
-    public async Task<byte[]> DownloadAsync(string imageUrl, CancellationToken cancellationToken)
+    public async Task<byte[]> DownloadAsync(string imageUrl, CancellationToken cancellationToken = default)
     {
         var objectPath = ExtractObjectPath(imageUrl);
         using var response = await _httpClient.GetAsync($"storage/v1/object/{_bucket}/{objectPath}", cancellationToken);

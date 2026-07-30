@@ -1,3 +1,5 @@
+using ChatApp.Domain.Enums;
+
 namespace ChatApp.Domain.Entities;
 
 /// <summary>
@@ -17,6 +19,8 @@ public sealed class User
     /// FluentValidation (Application) and the DB CHECK/UNIQUE constraint (Infrastructure), not Domain.
     /// </summary>
     public required string Username { get; init; }
+
+    public UserRole Role { get; set; } = UserRole.CommonUser;
 
     /// <summary>
     /// True only for the single hidden system Agent that posts OCR results; the Agent is never a conversation participant.

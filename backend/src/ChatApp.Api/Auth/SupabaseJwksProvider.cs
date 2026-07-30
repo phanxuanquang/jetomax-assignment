@@ -20,7 +20,7 @@ public sealed class SupabaseJwksProvider(HttpClient httpClient, Microsoft.Extens
     private DateTimeOffset _cachedAt = DateTimeOffset.MinValue;
 
     /// <summary>Returns the current signing keys, refreshing from Supabase's JWKS endpoint if the cache is stale.</summary>
-    public async Task<IReadOnlyList<SecurityKey>> GetSigningKeysAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<SecurityKey>> GetSigningKeysAsync(CancellationToken cancellationToken = default)
     {
         if (DateTimeOffset.UtcNow - _cachedAt < CacheDuration && _cachedKeys.Count > 0)
         {

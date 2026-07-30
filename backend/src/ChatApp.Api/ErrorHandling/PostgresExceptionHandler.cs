@@ -13,7 +13,7 @@ public sealed class PostgresExceptionHandler : IExceptionHandler
     private const string UniqueViolation = "23505";
     private const string CheckViolation = "23514";
 
-    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
+    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken = default)
     {
         if (exception is not PostgresException postgresException)
         {

@@ -19,7 +19,7 @@ public sealed class ConversationAccess(ICurrentUserProvider currentUserProvider,
             ? userId
             : null;
 
-    public async Task<Result<User>> GetCurrentUserAsync(CancellationToken cancellationToken)
+    public async Task<Result<User>> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
         if (UserId is not { } userId)
         {
@@ -35,7 +35,7 @@ public sealed class ConversationAccess(ICurrentUserProvider currentUserProvider,
         return Result<User>.Success(user);
     }
 
-    public async Task<Result<Conversation>> GetOwnedConversationAsync(Guid conversationId, CancellationToken cancellationToken)
+    public async Task<Result<Conversation>> GetOwnedConversationAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         if (UserId is not { } userId)
         {
@@ -59,7 +59,7 @@ public sealed class ConversationAccess(ICurrentUserProvider currentUserProvider,
         return Result<Conversation>.Success(conversation);
     }
 
-    public async Task<Result<Conversation>> EnsureCanSendAsync(Guid conversationId, CancellationToken cancellationToken)
+    public async Task<Result<Conversation>> EnsureCanSendAsync(Guid conversationId, CancellationToken cancellationToken = default)
     {
         if (UserId is not { } userId)
         {

@@ -16,7 +16,7 @@ public sealed class SecuritySchemeTransformer : IOpenApiDocumentTransformer
     private const string ClientKeyScheme = "ClientKey";
     private const string OnBehalfOfScheme = "OnBehalfOf";
 
-    public Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken)
+    public Task TransformAsync(OpenApiDocument document, OpenApiDocumentTransformerContext context, CancellationToken cancellationToken = default)
     {
         document.Components ??= new OpenApiComponents();
         document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();

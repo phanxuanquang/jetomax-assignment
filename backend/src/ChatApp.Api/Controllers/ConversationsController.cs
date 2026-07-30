@@ -21,7 +21,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 {
     [HttpGet]
     [AllowedClients(Client.App, Client.Mcp)]
-    public async Task<IActionResult> Get([FromQuery] string? q, CancellationToken cancellationToken)
+    public async Task<IActionResult> Get([FromQuery] string? q, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Get.Query(q), cancellationToken);
         return result.ToActionResult();
@@ -29,7 +29,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpPost]
     [AllowedClients(Client.App)]
-    public async Task<IActionResult> Create([FromBody] CreateConversationRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create([FromBody] CreateConversationRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Create.Command(request.ParticipantUserIds), cancellationToken);
         return result.ToActionResult();
@@ -37,7 +37,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpPost("join")]
     [AllowedClients(Client.App, Client.Mcp)]
-    public async Task<IActionResult> Join([FromBody] JoinConversationRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Join([FromBody] JoinConversationRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Join.Command(request.PublicId), cancellationToken);
         return result.ToActionResult();
@@ -45,7 +45,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpPatch("{id:guid}/name")]
     [AllowedClients(Client.App)]
-    public async Task<IActionResult> Rename(Guid id, [FromBody] RenameConversationRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Rename(Guid id, [FromBody] RenameConversationRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Rename.Command(id, request.DisplayName), cancellationToken);
         return result.ToActionResult();
@@ -53,7 +53,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpPatch("{id:guid}/readonly")]
     [AllowedClients(Client.App)]
-    public async Task<IActionResult> SetReadonly(Guid id, [FromBody] SetReadonlyRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> SetReadonly(Guid id, [FromBody] SetReadonlyRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.SetReadonly.Command(id, request.IsReadonly), cancellationToken);
         return result.ToActionResult();
@@ -61,7 +61,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpPost("{id:guid}/transfer")]
     [AllowedClients(Client.App)]
-    public async Task<IActionResult> TransferOwnership(Guid id, [FromBody] TransferOwnershipRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> TransferOwnership(Guid id, [FromBody] TransferOwnershipRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.TransferOwnership.Command(id, request.NewOwnerUserId), cancellationToken);
         return result.ToActionResult();
@@ -77,7 +77,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpPost("{id:guid}/participants")]
     [AllowedClients(Client.App)]
-    public async Task<IActionResult> AddParticipants(Guid id, [FromBody] ParticipantsRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> AddParticipants(Guid id, [FromBody] ParticipantsRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.AddParticipants.Command(id, request.UserIds), cancellationToken);
         return result.ToActionResult();
@@ -85,7 +85,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpDelete("{id:guid}/participants")]
     [AllowedClients(Client.App)]
-    public async Task<IActionResult> RemoveParticipants(Guid id, [FromBody] ParticipantsRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> RemoveParticipants(Guid id, [FromBody] ParticipantsRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.RemoveParticipants.Command(id, request.UserIds), cancellationToken);
         return result.ToActionResult();
@@ -93,7 +93,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpPost("{id:guid}/leave")]
     [AllowedClients(Client.App)]
-    public async Task<IActionResult> Leave(Guid id, [FromBody] LeaveConversationRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Leave(Guid id, [FromBody] LeaveConversationRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Leave.Command(id, request.Mode), cancellationToken);
         return result.ToActionResult();
@@ -101,7 +101,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
 
     [HttpPost("{id:guid}/summary")]
     [AllowedClients(Client.App, Client.Mcp, Client.N8n)]
-    public async Task<IActionResult> Summarize(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Summarize(Guid id, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ChatApp.Application.Features.Internal.SummarizeConversation.Query(id), cancellationToken);
         return result.ToActionResult();
