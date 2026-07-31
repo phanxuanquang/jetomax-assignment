@@ -20,7 +20,7 @@ public abstract class Message
     public Guid ConversationId { get; init; }
 
     /// <summary>
-    /// The sender's user id. May be the hidden AI Agent's id.
+    /// The sender's user id.
     /// </summary>
     public Guid UserId { get; init; }
 
@@ -49,7 +49,7 @@ public abstract class Message
     public Conversation? Conversation { get; set; }
 
     /// <summary>
-    /// The sender of this message; may be the hidden AI Agent.
+    /// The sender of this message.
     /// </summary>
     public User? Sender { get; set; }
 

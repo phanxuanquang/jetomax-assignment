@@ -3,14 +3,13 @@ using ChatApp.Domain.Enums;
 namespace ChatApp.Domain.Entities;
 
 /// <summary>
-/// A registered human, or the hidden system AI Agent that posts OCR results. Backed by the
-/// <c>profiles</c> table; for real users <see cref="Id"/> equals the corresponding Supabase
-/// <c>auth.users</c> id.
+/// A registered human. Backed by the <c>profiles</c> table; <see cref="Id"/> equals the
+/// corresponding Supabase <c>auth.users</c> id.
 /// </summary>
 public sealed class User
 {
     /// <summary>
-    /// Unique identifier; equals the Supabase auth user id for real users.
+    /// Unique identifier; equals the Supabase auth user id.
     /// </summary>
     public Guid Id { get; } = Guid.NewGuid();
 
@@ -20,12 +19,14 @@ public sealed class User
     /// </summary>
     public required string Username { get; init; }
 
-    public UserRole Role { get; set; } = UserRole.CommonUser;
-
     /// <summary>
-    /// True only for the single hidden system Agent that posts OCR results; the Agent is never a conversation participant.
+    /// System-wide permission tier (default <see cref="UserRole.User"/>), distinct from per-conversation
+    /// Owner/Member. Physically stored in the companion <c>user_roles</c> table (1:1 via shared key);
+    /// mapped onto this same entity via EF Core entity splitting (Infrastructure's
+    /// <c>UserConfiguration</c>) rather than a separate Domain type, so <c>User</c> stays one pure-model
+    /// aggregate. Gated by <c>ChatApp.Api</c>'s <c>[AllowedRoles]</c> attribute, not Domain.
     /// </summary>
-    public bool IsAgent { get; set; } = false;
+    public UserRole Role { get; set; } = UserRole.User;
 
     /// <summary>
     /// When the user was created. Set automatically when the instance is constructed.
@@ -43,7 +44,7 @@ public sealed class User
     public ICollection<Participant> Participations { get; set; } = [];
 
     /// <summary>
-    /// Messages sent by this user, including OCR replies when this is the hidden Agent. Populated by the persistence layer; empty until loaded.
+    /// Messages sent by this user. Populated by the persistence layer; empty until loaded.
     /// </summary>
     public ICollection<Message> SentMessages { get; set; } = [];
 }
