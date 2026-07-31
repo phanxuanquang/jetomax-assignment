@@ -1,0 +1,264 @@
+# Software Requirements Specification — Realtime Chat App
+
+Merged, authoritative requirements document. It combines the business requirements and the feature specification into one source of truth. Technical design is in `backend-system-design-and-architecture.md`; the data model is in `database-design.md`.
+
+---
+
+## 1. Introduction
+
+### 1.1 Purpose
+Define what the product must do and how each requirement is verified, so design and implementation can be traced back to a clear source.
+
+### 1.2 Scope
+A **realtime chat application** where users message each other one-to-one, create group chats, and join group chats. It supports images and an AI-assisted image feature, exposes an MCP server so ChatGPT can operate on conversations, and ships an n8n workflow that produces scheduled summaries.
+
+### 1.3 Definitions
+
+| Term | Meaning |
+|---|---|
+| PWA | Progressive Web App — one web build installable on PC, iOS, Android |
+| JWT | Signed token issued by Supabase Auth (Google OAuth), carried on every request |
+| Email | The Google account's email; unique, required, sign-in identity |
+| Username | Public handle; letters + digits only, ≤30 chars, unique — **auto-derived from the email's local-part** at sign-up, not user-chosen |
+| UserRole | System-wide permission tier: `Administrator` \| `Moderator` \| `User` (every account has exactly one, default `User`). **Distinct from "Owner"/"Member" below**, which are per-conversation, not system-wide |
+| Owner | The creator of a conversation; **transferable**; `null` owner ⟺ **frozen** |
+| PublicId | 6-char case-sensitive alphanumeric code used to join a conversation |
+| Member | A participant of a conversation |
+| MCP | Model Context Protocol — lets ChatGPT call the app's tools |
+| RLS | Row-Level Security — per-row authorization enforced in Postgres |
+
+---
+
+## 2. Overall description
+
+### 2.1 Product perspective
+Delivered as a single **responsive PWA** rather than three native apps: one codebase runs in desktop browsers and installs to the home screen on mobile. The backend is a thin logic plane; identity, storage, and the database are provided by Supabase.
+
+### 2.2 Actors & roles
+
+| Actor | Description |
+|---|---|
+| **User** | A registered person; can chat 1:1, create/join groups, send images, request summaries |
+| **Group Owner** | A User who created a group; additionally manages members and can delete the group |
+| **ChatGPT** | External actor; via MCP, lists conversations, summarizes a thread, joins a group |
+| **n8n Scheduler** | External actor; runs the daily summary workflow |
+
+### 2.3 Assumptions & dependencies
+
+| # | Assumption | Rationale |
+|---|---|---|
+| A1 | Cross-platform = one PWA, not native apps | Coverage with minimal effort |
+| A2 | General-purpose chat (no domain context) | Feature set stays broadly applicable |
+| A3 | "AI-assisted image messaging" = an on-send caption (feeds memory); OCR/text-extraction was descoped | Cheaper, faster, simpler than adding an extraction feature |
+| A4 | Single owner per conversation, **transferable**; owner leaving chooses delete or freeze | Simple, explicit ownership without multi-owner conflicts |
+| A5 | Rolling conversation memory backs all summaries | Makes per-thread and 24h summaries O(1) to produce |
+| A6 | n8n runs on a daily schedule | "Last 24 hours" implies a periodic job |
+| A7 | Users join a conversation by entering its `PublicId` | User-initiated join without owner-add |
+| A8 | Usernames are unique; a conversation is created with ≥1 other participant | Needed for identity and display-name generation |
+
+### 2.4 Constraints / out of scope
+Push notifications; end-to-end encryption; in-app message search; voice/video; multi-owner or co-admin roles; horizontal scale-out. Acknowledged and deferred.
+
+---
+
+## 3. Use case diagram
+
+```mermaid
+flowchart LR
+    U(["User"])
+    O(["Group Owner"])
+    GPT(["ChatGPT"])
+    N8N(["n8n Scheduler"])
+
+    subgraph SYS["Realtime Chat Application"]
+        UC_AUTH["Register / Sign in"]
+        UC_DM["Start direct (1:1) chat"]
+        UC_CREATE["Create conversation"]
+        UC_JOIN["Join by PublicId"]
+        UC_MSG["Send / receive messages"]
+        UC_IMG["Send / receive images"]
+        UC_SUM["Request thread summary"]
+        UC_MANAGE["Add / remove participants"]
+        UC_RENAME["Rename conversation"]
+        UC_RO["Set readonly"]
+        UC_XFER["Transfer ownership"]
+        UC_LEAVE["Leave (delete / freeze)"]
+    end
+
+    O -.->|is a| U
+
+    U --> UC_AUTH
+    U --> UC_DM
+    U --> UC_CREATE
+    U --> UC_JOIN
+    U --> UC_MSG
+    U --> UC_IMG
+    U --> UC_SUM
+    U --> UC_LEAVE
+
+    O --> UC_MANAGE
+    O --> UC_RENAME
+    O --> UC_RO
+    O --> UC_XFER
+
+    GPT -->|list, MCP| UC_MSG
+    GPT -->|summarize, MCP| UC_SUM
+    GPT -->|join, MCP| UC_JOIN
+    N8N -->|daily digest| UC_SUM
+```
+
+*User and Group Owner are both actors; a Group Owner is a User who additionally has owner-only actions (add/remove participants, rename, set readonly, transfer ownership, delete/freeze on leave).*
+
+---
+
+## 4. Functional requirements
+
+Each feature: description, behavior, acceptance criteria, edge cases.
+
+### F-1 · Registration & authentication
+**Behavior.** Sign-in is **exclusively "Sign in with Google"** via Supabase Auth (Google OAuth) — there is no email/password or any other provider. On first sign-in, a profile is created automatically: **Username is auto-derived from the Google email's local-part** (the part before `@`), sanitized to letters+digits and deduplicated with a numeric suffix if another account already derived the same username from a different email domain (e.g. `alice@gmail.com` and `alice@work.com` → `alice`, `alice1`). The email itself is stored and must be unique. Every new account is assigned the `User` role by default (see F-1a). Every request carries the resulting JWT.
+**Acceptance.** A new Google account signing in for the first time gets a profile with a valid, unique, auto-derived username and a `User` role, with no separate sign-up step; a returning user signs in and reaches the same profile; unauthenticated requests are rejected.
+**Edge cases.** An email whose local-part sanitizes to nothing (e.g. all-symbol) falls back to a generated placeholder username; a second account colliding on the same derived username gets a numeric suffix; email uniqueness is enforced (a Google account can only ever map to one profile).
+
+### F-1a · Roles & authorization
+**Behavior.** Every user has exactly one **UserRole**: `Administrator`, `Moderator`, or `User` (default). The role — not which client (app, ChatGPT/MCP, or the n8n workflow) made the call — decides what an authenticated request may do. MCP and n8n calls are **always on behalf of a specific real user** (no anonymous/system-wide calls), and that user's role is what's checked.
+**Acceptance.** A `User`-role account can use all ordinary chat features; only `Administrator` accounts can reach the bulk/system-wide operations that power the n8n daily digest (listing every conversation, publishing the digest). Promoting an account to `Moderator`/`Administrator` is a manual, out-of-band operation — there is no self-service "become an admin" action.
+**Edge cases.** A `Moderator` today has the same permissions as `User` — the tier exists for future use, no feature currently distinguishes them; don't assume otherwise.
+
+### F-2 · Direct & real-time messaging
+**Behavior.** Users chat 1:1 or in groups over a persistent WebSocket (SignalR). The server persists each message, then broadcasts it to all members. History is paginated via REST; the database is the source of truth, so reconnecting clients recover correct state.
+**Acceptance.** A sent message appears for all online members without refresh; history loads and paginates; reconnect loses/duplicates nothing.
+**Edge cases.** Messages from a member who later leaves remain in history.
+
+### F-3 · Create & join conversations
+**Behavior.** A user **creates** a conversation by adding **1 or more** other participants, **identified by their `Username`** (2 people = direct chat, more = group), becoming its owner. The backend auto-generates a unique 6-char `PublicId` and an initial `DisplayName` from the owner's and up to two other participants' usernames (e.g. `alice, bob`). A `DisplayName` may contain letters, digits, commas, and spaces. A user **joins** an existing conversation by entering its exact `PublicId`.
+**Acceptance.** Creating yields a conversation with a unique PublicId and generated name, and the creator can chat immediately; entering a valid PublicId of a joinable conversation adds the user and shows history + live messages.
+**Edge cases.** Creating with no other participant is rejected; creating with an unknown username is rejected (404, whole request fails together — no partial creation); joining with a wrong/nonexistent PublicId fails cleanly; joining a **frozen** or deleted conversation is rejected; joining one already joined is a no-op.
+
+### F-4 · Ownership & lifecycle
+**Ownership.** Each conversation has **one owner = its creator**, but ownership is **transferable** to another participant. A conversation with **no owner** (`owner_id = null`) is **frozen**.
+
+| Action | Who |
+|---|---|
+| Send / read messages | any participant (send blocked when readonly, except owner) |
+| Join (by PublicId) | any user, if not frozen/deleted |
+| Add / remove participant (**by `Username`**) | **owner only** |
+| Rename `DisplayName` | **owner only** |
+| Set `IsReadonly` | **owner only** |
+| Transfer ownership (**by `Username`**) | **owner only** (to a participant) |
+| Leave (self) | any participant |
+| Delete (soft) or Freeze | **owner**, via leaving |
+
+**Readonly.** A conversation auto-becomes readonly when it has **1 participant**, and auto-clears when a join brings it back to **≥2**. The owner may also set readonly manually. When readonly, **only the owner may send**.
+
+**Owner leaving** chooses between soft-**delete** and **freeze**:
+
+```mermaid
+flowchart TD
+    Leave["Owner taps Leave"] --> Ask{"Choose"}
+    Ask -->|"Delete"| Del["Conversation soft-deleted (is_deleted = true);<br/>notify all participants; owner's row removed too"]
+    Ask -->|"Freeze"| Frz["owner_id = null · no new joins;<br/>participants may still chat or leave"]
+```
+
+**Acceptance.** Only the owner can add/remove participants, rename, set readonly, transfer ownership, or delete — enforced server-side (not just hidden in the UI); a non-owner leaves freely; a frozen conversation blocks new joins but allows chatting and leaving. **On delete, all participants are notified in realtime and the owner's own participant row is removed** (decision B-5) so every client reacts immediately rather than only on refresh.
+**Edge cases.** A frozen conversation stays unmanaged (no owner) until... it remains frozen (owner chose freeze over transfer); a manual readonly can be cleared by a subsequent join crossing the 1↔2 boundary (accepted simplification).
+
+### F-5 · Image messaging
+**Behavior.** A participant sends **one image per message**. The client uploads it **directly** to Supabase Storage, then sends a message carrying the URL; the backend never streams bytes. On send, the backend makes one vision pass that generates a **caption**, which feeds conversation memory. There is no text-extraction/OCR feature — captioning is the only AI step an image goes through.
+**Acceptance.** A member sends an image and all participants see it inline in realtime; images persist and reload with history; each image has a caption.
+**Edge cases.** Oversized/non-image uploads rejected client-side; a failed captioning call never blocks the image from sending (caption falls back to empty/null).
+
+### F-6 · Conversation memory & summarization
+**Behavior.** The system maintains a background rolling summary per conversation (per-chunk summaries plus one evolving overall summary) so summaries are cheap and current. On request, a summary combines the overall memory with a fresh summary of messages since the last checkpoint. One endpoint serves three callers: the in-app "Summarize" action, the MCP `summarize_thread` tool, and the n8n daily digest.
+**Acceptance.** Summarization runs in the background and never blocks sending; an on-demand summary reflects messages up to the request moment; ChatGPT obtains the same summary via MCP.
+
+---
+
+## 5. User flows
+
+### 5.1 Onboarding to first conversation
+
+```mermaid
+flowchart TD
+    Start(["Open app"]) --> Reg{"Registered?"}
+    Reg -->|no| Register["Register (email / password)"]
+    Reg -->|yes| Signin["Sign in -> receive JWT"]
+    Register --> Signin
+    Signin --> Choice{"What next?"}
+    Choice -->|Create| Create["Create a conversation (become owner)"]
+    Choice -->|Join| Join["Join by entering a PublicId"]
+    Choice -->|Direct| Direct["Start a direct (1:1) chat"]
+    Create --> Open["Open conversation"]
+    Join --> Open
+    Direct --> Open
+    Open --> Live["Send and receive messages in real time"]
+```
+
+### 5.2 Owner leaves a group
+
+```mermaid
+flowchart TD
+    Leave(["Owner taps Leave"]) --> Choice{"Choose"}
+    Choice -->|"Delete"| Del["Conversation soft-deleted<br/>(is_deleted = true)"]
+    Choice -->|"Freeze"| Frz["owner_id = null<br/>no new joins; others chat or leave"]
+```
+
+### 5.3 Request a thread summary
+
+```mermaid
+flowchart TD
+    Req(["Requester asks for a summary<br/>(in-app / ChatGPT / n8n)"]) --> Load["Load global memory (pre-computed)"]
+    Load --> Fresh["Summarize messages since last checkpoint"]
+    Fresh --> Combine["Combine into one summary"]
+    Combine --> Return["Return to requester"]
+```
+
+---
+
+## 6. Integration requirements
+
+### 6.1 MCP integration (ChatGPT)
+A remote MCP server (HTTPS, `/mcp`) is added to ChatGPT via **Developer Mode** (Plus/Pro/Team/Enterprise). Because ChatGPT's default connector mode only calls `search`/`fetch`, the server exposes **both** that standard pair **and** the custom tools.
+
+| ChatGPT capability | MCP tool |
+|---|---|
+| Display all conversations | `list_conversations` |
+| Summarize a selected thread | `summarize_thread` |
+| Join a group chat | `join_group` |
+| (standard) discovery + retrieval | `search`, `fetch` |
+
+**Acceptance.** The `/mcp` URL can be added as a connector; ChatGPT can list conversations, summarize a named thread, and join a group; setup steps (incl. Developer Mode) are in the README.
+
+### 6.2 n8n workflow
+A daily workflow retrieves all threads, summarizes each (reusing the summarization endpoint, which reads the pre-computed memory), produces one 24-hour overall summary, publishes to a web page, and appends to a Google Sheet.
+**Acceptance.** On schedule, per-thread and one overall 24h summary are produced and published to both the web page and the Google Sheet; the workflow is importable (`workflow.json`).
+
+---
+
+## 7. Submission requirements
+A GitHub repo with the app, MCP server, and n8n workflow; a README enabling a fresh clone to run; and a commit history showing phased, incremental development (a graded artifact — commit per feature/phase, meaningful messages, not one squashed commit).
+
+---
+
+## 8. Non-functional / cross-cutting rules
+
+| Rule | Effect |
+|---|---|
+| AI is on-demand + cached, never fan-out | Predictable, low AI cost |
+| AI failure never blocks core chat | Chat stays reliable |
+| Database is the source of truth | Reconnects recover correct state |
+| Authorization enforced server-side (API + RLS), not just UI | Security cannot be bypassed by the client |
+| One responsive PWA | Consistent experience on PC / iOS / Android |
+
+---
+
+## 9. Traceability
+
+| Requirement | Fulfilled by | Verified by |
+|---|---|---|
+| Cross-platform (§2.1) | React + TS PWA | Installable on desktop + mobile |
+| F-1…F-6, F-1a | Backend + client features | Acceptance criteria above |
+| Create / join (F-3) | `POST /conversations`, `POST /conversations/join` (by PublicId) | Create-then-chat, join-then-see-history |
+| MCP (§6.1) | MCP server + tools | ChatGPT lists / summarizes / joins |
+| n8n (§6.2) | `workflow.json` | Web page + Google Sheet updated |
+| Submission (§7) | Repo + README + phased commits | Fresh clone runs |

@@ -5,5 +5,4 @@
     <Project Path="src/ChatApp.Domain/ChatApp.Domain.csproj" Id="8a6f4134-64a2-4eda-afc9-9737c9df7399" />
     <Project Path="src/ChatApp.Infrastructure/ChatApp.Infrastructure.csproj" Id="d0ca1b02-cacd-4e2e-914d-ad5cf2e8a8b8" />
   </Folder>
-  <Folder Name="/tests/" />
 </Solution>

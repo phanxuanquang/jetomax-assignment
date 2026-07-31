@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>ChatApp — Bảng test thủ công</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 920px; margin: 24px auto; padding: 0 16px; line-height: 1.5; }
+  h1 { font-size: 22px; }
+  h2 { font-size: 17px; margin-top: 32px; border-bottom: 1px solid #8884; padding-bottom: 6px; }
+  .card { border: 1px solid #8884; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
+  input, textarea { width: 100%; box-sizing: border-box; padding: 8px; font-size: 14px; border-radius: 6px; border: 1px solid #8886; }
+  textarea { font-family: monospace; font-size: 12px; resize: vertical; }
+  button { margin-top: 12px; margin-right: 8px; padding: 8px 16px; border-radius: 6px; border: 1px solid #8886; cursor: pointer; font-size: 14px; }
+  button.primary { background: #2563eb; color: white; border-color: #2563eb; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  #log { height: 260px; overflow-y: auto; background: #0001; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+  .status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .status.ok { background: #16a34a33; color: #16a34a; }
+  .status.off { background: #8884; }
+  .hint { font-size: 12px; opacity: 0.75; }
+  a.button-link { display: inline-block; margin-top: 12px; padding: 8px 16px; border-radius: 6px; border: 1px solid #8886; text-decoration: none; color: inherit; }
+</style>
+</head>
+<body>
+
+<h1>ChatApp — Bảng test thủ công (không cần terminal)</h1>
+<p class="hint">Trang này chỉ dùng để kiểm thử. Mở bằng trình duyệt khi backend đang chạy (địa chỉ hiện tại: <code id="apiOrigin"></code>).</p>
+
+<h2>1. Đăng nhập lấy JWT</h2>
+<div class="card">
+  <div class="row">
+    <div>
+      <label>Supabase Project URL</label>
+      <input id="supaUrl" placeholder="https://xxxx.supabase.co" />
+    </div>
+    <div>
+      <label>Anon key</label>
+      <input id="anonKey" placeholder="anon / publishable key (Project Settings → API)" />
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Email</label>
+      <input id="email" placeholder="alice@test.com" />
+    </div>
+    <div>
+      <label>Mật khẩu</label>
+      <input id="password" type="password" />
+    </div>
+  </div>
+  <button class="primary" onclick="login()">Đăng nhập</button>
+  <span id="loginStatus" class="hint"></span>
+
+  <label>JWT (dán sang mục 3 bên dưới, hoặc nó tự điền)</label>
+  <textarea id="jwtOut" rows="3" readonly></textarea>
+  <label>User id (dùng làm participantUserIds khi tạo conversation trên Scalar)</label>
+  <input id="userIdOut" readonly />
+</div>
+
+<h2>2. Test các API còn lại (tạo conversation, đổi tên, tóm tắt, ...)</h2>
+<div class="card">
+  <p>Dùng giao diện Scalar — dán JWT ở mục 1 vào nút <b>Authorize</b> (scheme <b>Bearer</b>), rồi gọi endpoint bất kỳ trực tiếp trên trang, không cần Postman/curl.</p>
+  <a class="button-link" href="/scalar/v1" target="_blank">→ Mở Scalar API tester</a>
+</div>
+
+<h2>3. Test tin nhắn/ảnh realtime (SignalR — Scalar không test được phần này)</h2>
+<div class="card">
+  <div class="row">
+    <div>
+      <label>API Base URL</label>
+      <input id="apiBase" />
+    </div>
+    <div>
+      <label>Conversation Id</label>
+      <input id="convId" placeholder="lấy từ response tạo conversation ở mục 2" />
+    </div>
+  </div>
+  <label>JWT</label>
+  <textarea id="jwtIn" rows="2"></textarea>
+  <button class="primary" onclick="connect()">Kết nối</button>
+  <button onclick="disconnect()">Ngắt kết nối</button>
+  <span id="connStatus" class="status off">Chưa kết nối</span>
+
+  <div class="row" style="margin-top:16px">
+    <div>
+      <label>Nội dung tin nhắn</label>
+      <input id="msgText" placeholder="Xin chào!" />
+      <button onclick="sendMessage()">Gửi tin nhắn</button>
+    </div>
+    <div>
+      <label>URL ảnh (đã upload sẵn lên Storage)</label>
+      <input id="imgUrl" placeholder="https://.../images/..." />
+      <button onclick="sendImage()">Gửi ảnh</button>
+    </div>
+  </div>
+
+  <label style="margin-top:16px">Nhật ký sự kiện (tin nhắn mới, thành viên thay đổi, ...)</label>
+  <div id="log"></div>
+</div>
+
+<h2>4. Tạo user test qua Supabase Studio (không cần API)</h2>
+<div class="card">
+  <p>Studio → <b>Authentication</b> → <b>Users</b> → nút <b>Add user</b> → chọn <b>Create new user</b>. Nhớ tick <b>Auto Confirm User</b> để đăng nhập được ngay, không cần xác nhận email.</p>
+  <p class="hint">Muốn set <code>username</code> hiển thị cho đúng: điền vào ô "User Metadata" dạng JSON: <code>{"username":"alice"}</code>.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8/dist/browser/signalr.min.js"></script>
+<script>
+  document.getElementById('apiOrigin').textContent = window.location.origin;
+  document.getElementById('apiBase').value = window.location.origin;
+
+  async function login() {
+    const url = document.getElementById('supaUrl').value.replace(/\/$/, '');
+    const anon = document.getElementById('anonKey').value;
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    const statusEl = document.getElementById('loginStatus');
+    statusEl.textContent = 'Đang đăng nhập...';
+    try {
+      const res = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'apikey': anon, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.msg || data.error_description || JSON.stringify(data));
+      document.getElementById('jwtOut').value = data.access_token;
+      document.getElementById('jwtIn').value = data.access_token;
+      document.getElementById('userIdOut').value = data.user.id;
+      statusEl.textContent = '✓ Đăng nhập thành công';
+    } catch (e) {
+      statusEl.textContent = '✗ Lỗi: ' + e.message;
+    }
+  }
+
+  let connection = null;
+
+  function log(line) {
+    const el = document.getElementById('log');
+    const time = new Date().toLocaleTimeString();
+    el.textContent += `[${time}] ${line}\n`;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  async function connect() {
+    const base = document.getElementById('apiBase').value.replace(/\/$/, '');
+    const jwt = document.getElementById('jwtIn').value.trim();
+    if (!jwt) { alert('Cần JWT — đăng nhập ở mục 1 hoặc dán tay vào ô JWT.'); return; }
+
+    connection = new signalR.HubConnectionBuilder()
+      .withUrl(`${base}/hub/chat`, { accessTokenFactory: () => jwt })
+      .configureLogging(signalR.LogLevel.Warning)
+      .withAutomaticReconnect()
+      .build();
+
+    connection.on('NewMessage', (msg) => log('NewMessage: ' + JSON.stringify(msg)));
+    connection.on('MemberChanged', (convId, userId, action) => log(`MemberChanged: conv=${convId} user=${userId} action=${action}`));
+    connection.on('DigestPublished', (digest, at) => log(`DigestPublished @ ${at}: ${digest}`));
+
+    try {
+      await connection.start();
+      document.getElementById('connStatus').textContent = 'Đã kết nối';
+      document.getElementById('connStatus').className = 'status ok';
+      log('Đã kết nối tới hub.');
+    } catch (e) {
+      log('Lỗi kết nối: ' + e.message);
+    }
+  }
+
+  async function disconnect() {
+    if (connection) await connection.stop();
+    document.getElementById('connStatus').textContent = 'Chưa kết nối';
+    document.getElementById('connStatus').className = 'status off';
+    log('Đã ngắt kết nối.');
+  }
+
+  async function sendMessage() {
+    if (!connection) { alert('Kết nối trước đã.'); return; }
+    const convId = document.getElementById('convId').value.trim();
+    const text = document.getElementById('msgText').value;
+    try {
+      await connection.invoke('SendMessage', convId, text);
+      log('Đã gửi tin nhắn: ' + text);
+    } catch (e) { log('Lỗi gửi tin nhắn: ' + e.message); }
+  }
+
+  async function sendImage() {
+    if (!connection) { alert('Kết nối trước đã.'); return; }
+    const convId = document.getElementById('convId').value.trim();
+    const url = document.getElementById('imgUrl').value;
+    try {
+      await connection.invoke('SendImage', convId, url);
+      log('Đã gửi ảnh: ' + url);
+    } catch (e) { log('Lỗi gửi ảnh: ' + e.message); }
+  }
+</script>
+</body>
+</html>
