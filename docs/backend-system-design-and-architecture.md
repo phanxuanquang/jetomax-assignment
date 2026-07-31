@@ -281,7 +281,7 @@ If the process restarts mid-update, an in-flight fold can be lost — the next m
 | Path | Behavior |
 |---|---|
 | **Threshold fold** (write) | Once `pending_tokens` crosses a configured threshold, summarize the pending messages, fold the result into `global_memory`, reset the counter |
-| **On-demand summary** (pure read) | Return `global_memory` plus a fresh summary of everything since the last fold — never mutates stored memory. This is what powers the in-app "Summarize" action, the n8n digest, and (once built) the MCP `summarize_thread` tool |
+| **On-demand summary** (pure read) | Return `global_memory` plus a fresh summary of everything since the last fold — never mutates stored memory. This is what powers the in-app "Summarize" action, the n8n digest, and the MCP `get_conversation_summarization` tool |
 
 Because `global_memory` is always current, an on-demand summary only needs to summarize the *tail* since the last fold, not the whole conversation history — cost stays flat as history grows.
 

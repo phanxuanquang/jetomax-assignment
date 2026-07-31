@@ -4,13 +4,13 @@ The MCP server is a **separate deployable** that exposes tools to LLM platforms 
 
 ```mermaid
 flowchart LR
-    GPT["LLM Platform"] -->|MCP /mcp| MCPS["MCP server<br/>(separate deployable)"]
+    GPT["LLM Platform"] -->|OAuth + MCP /mcp| MCPS["MCP server<br/>(separate deployable)"]
     MCPS -->|REST + service key| API["Backend API"]
 ```
 
 ## Example: Connecting to ChatGPT
 
-The server is added as a remote connector at its `https://…/mcp` route via ChatGPT **Developer Mode** (Plus/Pro/Team/Enterprise). ChatGPT's default connector mode only calls the standard `search`/`fetch` tools — custom tools require Developer Mode — so the server ships both the standard pair and the custom tools, working in either mode.
+The server is added as a remote connector at its `https://…/mcp` route via ChatGPT **Developer Mode** (Plus/Pro/Team/Enterprise). There's no standard `search`/`fetch` pair (see the tools table below), so this only works via Developer Mode's custom tool calling, not ChatGPT's default connector mode.
 
 Reference: [Building MCP servers for ChatGPT](https://platform.openai.com/docs/mcp) · [Model Context Protocol](https://modelcontextprotocol.io/) · [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)
 
