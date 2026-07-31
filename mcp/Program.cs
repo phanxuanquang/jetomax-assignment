@@ -1,6 +1,7 @@
 using ChatApp.Mcp.Backend;
 using ChatApp.Mcp.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using ModelContextProtocol.AspNetCore.Authentication;
@@ -9,6 +10,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddConsole(consoleLogOptions =>
 {
     consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
+});
+
+// Behind ngrok/a reverse proxy, Kestrel only sees plain HTTP - without this, every URL this server
+// generates (WWW-Authenticate, the resource_metadata document) comes out http:// instead of https://,
+// which breaks OAuth discovery for a client connecting over the real https:// tunnel URL. The proxy's
+// IP isn't known ahead of time (ngrok, or whatever host this deploys to), so trust any forwarder.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 builder.Services.AddOptions<BackendOptions>()
@@ -72,6 +84,7 @@ builder.Services.AddMcpServer()
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapMcp("/mcp").RequireAuthorization();
