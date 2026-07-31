@@ -80,6 +80,32 @@ The MCP endpoint is `POST/GET /mcp` on whatever port the console prints. Every r
 
 This server needs a public HTTPS URL — ChatGPT and Claude both connect to it remotely, not as a local subprocess. Any host that can run a .NET 10 ASP.NET Core app works (same options as the [backend](../backend/README.md)); for local testing without deploying anywhere, a tunnel like [ngrok](https://ngrok.com/) pointed at your local port is enough to get an HTTPS URL ChatGPT/Claude can reach.
 
+## Test with ChatGPT on your own machine first
+
+Before deploying anywhere, verify the whole flow (ChatGPT → your MCP server → your backend) locally. ChatGPT requires HTTPS, so a tunnel stands in for a real deployment:
+
+1. Run the server locally (see [Build & run locally](#build--run-locally)):
+   ```bash
+   dotnet run
+   ```
+   Note the `http://localhost:<port>` URL the console prints.
+
+2. Get a public HTTPS URL pointing at that port with [ngrok](https://ngrok.com/) (free tier is enough):
+   ```bash
+   ngrok http <port>
+   ```
+   Copy the `https://xxxx.ngrok-free.app` forwarding URL it prints.
+
+3. Follow [Connecting it to ChatGPT](#connecting-it-to-chatgpt) below, but use `https://xxxx.ngrok-free.app/mcp` as the connector URL instead of a real host.
+
+4. In a ChatGPT conversation with this connector enabled, ask it something that requires a tool call — e.g. "list my ChatApp conversations" or "search my conversations for X". Check your `dotnet run` console: you should see the tool's log lines and the matching `BackendClient` HTTP call.
+
+5. Fix anything that fails here before touching a real deployment — a local loop is much faster to iterate on than a deployed one.
+
+**Notes:**
+- The free ngrok URL changes every time you restart it — update the connector's URL in ChatGPT each time, or use a [reserved domain](https://ngrok.com/docs/universal-gateway/domains/) if you're testing repeatedly.
+- Once you deploy for real, the only change is the URL in ChatGPT/Claude's connector settings — nothing in `mcp/` itself needs to change.
+
 ## Connecting it to ChatGPT
 
 1. In ChatGPT: **Settings → Apps → Advanced settings → Developer mode** → on (Plus/Pro/Business/Enterprise).
