@@ -53,6 +53,8 @@ Either way, you do not need to copy a JWT secret — see [§4](#4-backend-net) f
 
 Create a private bucket named `images` (Studio → Storage → New bucket). The frontend uploads images directly and generates its own signed URLs; the backend's only storage need is downloading an object's bytes (with the service-role key) so it can hand them to Gemini for captioning.
 
+`storage.objects` has RLS enabled by default with no policy — an upload fails with "new row violates row-level security policy" until one exists. `schema.sql` (next step) creates the two policies this bucket needs (`storage_images_insert`/`storage_images_select`, any authenticated user); nothing extra to do here as long as you run that script after creating the bucket.
+
 ### Auth — Google OAuth only
 
 This app has no email/password sign-in. Set it up in two places:

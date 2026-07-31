@@ -226,6 +226,10 @@ can_join(conv)        -- owner_id IS NOT NULL AND is_deleted = false
 
 `profiles_public` is a plain view (`select id, username from profiles`) granted to `authenticated`/`anon` — this is what a username-to-id lookup (creating a conversation, adding participants) queries.
 
+### Storage — the `images` bucket
+
+`storage.objects` (Supabase-managed, outside the tables above) also has RLS enabled, with no policy by default — meaning every client upload is rejected until one exists. Any `authenticated` user may `insert`/`select` objects in the `images` bucket; per-conversation authorization is already handled at the application layer, so the bucket only needs to gate signed-in vs. anonymous. See `schema.sql`'s "Storage RLS" section.
+
 ---
 
 ## Verification

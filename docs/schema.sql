@@ -362,5 +362,22 @@ create policy chunks_select on chunk_memories for select
     using (is_participant(conversation_id));
 
 -- =============================================================================
+--  Storage RLS — the "images" bucket
+-- =============================================================================
+-- storage.objects has RLS enabled by default with zero policies, which
+-- silently rejects every client upload ("new row violates row-level security
+-- policy") until a policy exists. Any signed-in user may upload to and read
+-- from the images bucket; per-conversation authorization already happens at
+-- the application layer, so the bucket itself only needs to gate signed-in
+-- vs. anonymous.
+drop policy if exists storage_images_insert on storage.objects;
+create policy storage_images_insert on storage.objects for insert
+    to authenticated with check (bucket_id = 'images');
+
+drop policy if exists storage_images_select on storage.objects;
+create policy storage_images_select on storage.objects for select
+    to authenticated using (bucket_id = 'images');
+
+-- =============================================================================
 --  End of schema.
 -- =============================================================================
