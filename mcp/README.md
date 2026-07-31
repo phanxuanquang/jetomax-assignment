@@ -1,12 +1,10 @@
-# ChatApp MCP Server
-
 Thin [MCP](https://modelcontextprotocol.io/) server for ChatGPT/Claude to operate on ChatApp conversations. No business logic — every tool call maps 1:1 to a ChatApp REST call. Design doc: [../docs/mcp-integration.md](../docs/mcp-integration.md).
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    Client["ChatGPT / Claude"] -->|1. no token| MCP["/mcp"]
+    Client["LLM Platform"] -->|1. no token| MCP["/mcp"]
     MCP -->|401 + WWW-Authenticate| Client
     Client -->|2. OAuth login| Auth0
     Auth0 -->|access token| Client
@@ -33,8 +31,6 @@ mcp/
 └── Tools/                ConversationTools.cs
 ```
 
-Flat, no Domain/Application/Infrastructure split — this is a protocol adapter, not a business system.
-
 ## Tools
 
 | Tool | Backend call | Read-only |
@@ -48,7 +44,7 @@ No `search`/`fetch` pair — ChatGPT's non-Developer-Mode default connector need
 
 ## Setup
 
-**1. Auth0** (free tier — [sign up](https://auth0.com/signup)):
+**1. Sign up for [Auth0](https://auth0.com/signup)**
 
 | Step | Where |
 |---|---|

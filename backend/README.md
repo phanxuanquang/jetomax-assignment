@@ -12,8 +12,6 @@ backend/
     └── ChatApp.Api/             host: controllers, SignalR Hub, auth, DI
 ```
 
-Dependency direction is `Api → Infrastructure → Application → Domain`. See [architecture](../docs/backend-system-design-and-architecture.md#4-codebase-architecture) for the full rationale.
-
 ## Prerequisites
 
 - [.NET SDK 10.x](https://dotnet.microsoft.com/download)
