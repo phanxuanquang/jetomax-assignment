@@ -1,14 +1,14 @@
-# MCP Integration (ChatGPT)
+# MCP Integration
 
-The MCP server is a **separate deployable** that exposes tools to ChatGPT and fulfils them by calling this backend's REST API — never talking to the database directly. All business logic stays in the backend; the MCP server is just a protocol adapter.
+The MCP server is a **separate deployable** that exposes tools to LLM platforms and fulfils them by calling this backend's REST API — never talking to the database directly. All business logic stays in the backend; the MCP server is just a protocol adapter.
 
 ```mermaid
 flowchart LR
-    GPT["ChatGPT<br/>(Developer Mode)"] -->|MCP /mcp| MCPS["MCP server<br/>(separate deployable)"]
+    GPT["LLM Platform"] -->|MCP /mcp| MCPS["MCP server<br/>(separate deployable)"]
     MCPS -->|REST + service key| API["Backend API"]
 ```
 
-## Connecting to ChatGPT
+## Example: Connecting to ChatGPT
 
 The server is added as a remote connector at its `https://…/mcp` route via ChatGPT **Developer Mode** (Plus/Pro/Team/Enterprise). ChatGPT's default connector mode only calls the standard `search`/`fetch` tools — custom tools require Developer Mode — so the server ships both the standard pair and the custom tools, working in either mode.
 

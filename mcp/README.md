@@ -50,57 +50,46 @@ No Domain/Application/Infrastructure split like the main backend — this projec
 
 `search`/`fetch` exist because ChatGPT's default (non-Developer-Mode) connector mode only ever calls those two — shipping both means this server works whether or not Developer Mode is on. `search` returns each matching conversation's id/title/url; `fetch` returns one conversation's full transcript as plain text (image messages show as `[image] <caption>`).
 
-## Build & run locally
+## Local Installation
+
+Replace the [user-secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets) values in the following script with the actual values before executing:
 
 ```bash
 cd mcp
+
+dotnet user-secrets init
+dotnet user-secrets set "Backend:BaseUrl"             "http://localhost:5000"
+dotnet user-secrets set "Backend:ClientKey"           "<the backend server's Clients:McpKey value>"
+dotnet user-secrets set "Backend:OnBehalfOfUsername"  "<an registered username>"
+dotnet user-secrets set "Mcp:ApiKey"                  "<a random string you generate>"
+
 dotnet restore
 dotnet build
-```
 
-Configure secrets with [user-secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets) — never commit real keys:
-
-```bash
-dotnet user-secrets init
-dotnet user-secrets set "Backend:BaseUrl"             "https://your-chatapp-backend"
-dotnet user-secrets set "Backend:ClientKey"           "<the backend's Clients:McpKey value>"
-dotnet user-secrets set "Backend:OnBehalfOfUsername"  "<an existing backend username>"
-dotnet user-secrets set "Mcp:ApiKey"                  "<a long random string you generate>"
-```
-
-Run:
-
-```bash
 dotnet run
 ```
 
 The MCP endpoint is `POST/GET /mcp` on whatever port the console prints. Every request needs `Authorization: Bearer <Mcp:ApiKey>` or it gets `401`.
 
-## Deploying it
+## Deployment
 
 This server needs a public HTTPS URL — ChatGPT and Claude both connect to it remotely, not as a local subprocess. Any host that can run a .NET 10 ASP.NET Core app works (same options as the [backend](../backend/README.md)); for local testing without deploying anywhere, a tunnel like [ngrok](https://ngrok.com/) pointed at your local port is enough to get an HTTPS URL ChatGPT/Claude can reach.
 
-## Test with ChatGPT on your own machine first
+## Test with ChatGPT
 
 Before deploying anywhere, verify the whole flow (ChatGPT → your MCP server → your backend) locally. ChatGPT requires HTTPS, so a tunnel stands in for a real deployment:
 
-1. Run the server locally (see [Build & run locally](#build--run-locally)):
-   ```bash
-   dotnet run
-   ```
-   Note the `http://localhost:<port>` URL the console prints.
+1. Run the server locally as guided in the [Build & run locally](#build--run-locally) section.
 
-2. Get a public HTTPS URL pointing at that port with [ngrok](https://ngrok.com/) (free tier is enough):
+2. Get a public HTTPS URL pointing at that port with [ngrok](https://ngrok.com):
    ```bash
-   ngrok http <port>
+   ngrok http 5001
    ```
    Copy the `https://xxxx.ngrok-free.app` forwarding URL it prints.
 
 3. Follow [Connecting it to ChatGPT](#connecting-it-to-chatgpt) below, but use `https://xxxx.ngrok-free.app/mcp` as the connector URL instead of a real host.
 
-4. In a ChatGPT conversation with this connector enabled, ask it something that requires a tool call — e.g. "list my ChatApp conversations" or "search my conversations for X". Check your `dotnet run` console: you should see the tool's log lines and the matching `BackendClient` HTTP call.
-
-5. Fix anything that fails here before touching a real deployment — a local loop is much faster to iterate on than a deployed one.
+4. In a ChatGPT conversation with this connector enabled, ask it something that requires a tool call (e.g. `list my ChatApp conversations`). Check the running server's logs, you should see the tool's log lines and the matching `BackendClient` HTTP call.
 
 **Notes:**
 - The free ngrok URL changes every time you restart it — update the connector's URL in ChatGPT each time, or use a [reserved domain](https://ngrok.com/docs/universal-gateway/domains/) if you're testing repeatedly.
@@ -126,10 +115,11 @@ Before deploying anywhere, verify the whole flow (ChatGPT → your MCP server �
 - **Add a tool**: add a method with `[McpServerTool]` to a class marked `[McpServerToolType]` under `Tools/` (new file or existing one). `WithToolsFromAssembly()` in `Program.cs` discovers it automatically — no registration step to remember.
 - **Upgrade the SDK**: bump the `ModelContextProtocol.AspNetCore` version in `ChatApp.Mcp.csproj` and rebuild. Check the [SDK's release notes](https://github.com/modelcontextprotocol/csharp-sdk/releases) for breaking changes first.
 - **Revoke access**: rotate `Mcp:ApiKey` (this server) and/or the backend's `Clients:McpKey` (backend) — either one invalidates every existing connector immediately.
-- **Backend contract drift**: `Backend/Dtos.cs` is a hand-maintained mirror of the backend's JSON shapes, not a shared library — if the backend's `ConversationDto`/`MessageDto` change, update these records to match. See [../docs/backend-system-design-and-architecture.md §10](../docs/backend-system-design-and-architecture.md#10-api-reference) for the source of truth.
+- **Backend contract drift**: `Backend/Dtos.cs` is a hand-maintained mirror of the backend's JSON shapes, not a shared library — if the backend's `ConversationDto`/`MessageDto` change, update these records to match. See [backend-system-design-and-architecture](../docs/backend-system-design-and-architecture.md#10-api-reference) for the source of truth.
 
-## Reference
+## References
 
-- [Model Context Protocol](https://modelcontextprotocol.io/) · [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)
+- [Model Context Protocol](https://modelcontextprotocol.io/) 
+- [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)
 - [ChatGPT: Developer mode and MCP apps](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt)
 - [Claude: Custom connectors (remote MCP)](https://claude.com/docs/connectors/custom/remote-mcp)
