@@ -1,8 +1,9 @@
+using ChatApp.Mcp.Options;
+using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
 
-namespace ChatApp.Mcp.Auth;
+namespace ChatApp.Mcp.Middlewares;
 
 /// <summary>Rejects any request whose <c>Authorization: Bearer &lt;key&gt;</c> doesn't match the configured API key — this server has no other access control.</summary>
 public sealed class ApiKeyMiddleware(RequestDelegate next, IOptions<McpAccessOptions> options)

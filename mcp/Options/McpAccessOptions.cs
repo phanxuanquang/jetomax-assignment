@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace ChatApp.Mcp.Auth;
+namespace ChatApp.Mcp.Options;
 
 /// <summary>The static bearer token that gates this MCP server, configured on the ChatGPT/Claude connector as an API key.</summary>
 public sealed class McpAccessOptions

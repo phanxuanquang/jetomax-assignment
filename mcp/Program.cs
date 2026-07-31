@@ -1,5 +1,6 @@
-using ChatApp.Mcp.Auth;
 using ChatApp.Mcp.Backend;
+using ChatApp.Mcp.Middlewares;
+using ChatApp.Mcp.Options;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);

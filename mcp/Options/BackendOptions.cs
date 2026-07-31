@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace ChatApp.Mcp.Backend;
+namespace ChatApp.Mcp.Options;
 
 /// <summary>Config for the one backend account this server always calls the API as.</summary>
 public sealed class BackendOptions

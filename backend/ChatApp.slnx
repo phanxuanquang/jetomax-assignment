@@ -3,7 +3,6 @@
     <Project Path="../mcp/ChatApp.Mcp.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <File Path="README.md" />
     <Project Path="src/ChatApp.Api/ChatApp.Api.csproj" Id="eb10e02a-0e62-42cc-b86d-79904ec25b5a" />
     <Project Path="src/ChatApp.Application/ChatApp.Application.csproj" Id="ac0de9fb-3259-42f6-94d7-6d666e69f533" />
     <Project Path="src/ChatApp.Domain/ChatApp.Domain.csproj" Id="8a6f4134-64a2-4eda-afc9-9737c9df7399" />
