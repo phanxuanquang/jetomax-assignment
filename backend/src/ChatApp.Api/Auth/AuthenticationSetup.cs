@@ -1,4 +1,5 @@
 using ChatApp.Application.Abstractions;
+using ChatApp.Application.Users;
 using ChatApp.Domain.Enums;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -93,7 +94,16 @@ public static class AuthenticationSetup
                         if (role is { } resolvedRole)
                         {
                             identity.AddClaim(new Claim(ClientClaimTypes.Role, resolvedRole.ToString()));
+                            return;
                         }
+
+                        // No profile yet - the handle_new_user trigger should already have created one
+                        // on sign-up, but if it's ever missing/disabled/out of sync, provision here
+                        // rather than leaving an otherwise-valid Supabase login unable to use the app.
+                        var email = context.Principal.FindFirst("email")?.Value;
+                        var provisioning = context.HttpContext.RequestServices.GetRequiredService<UserProvisioningService>();
+                        var user = await provisioning.EnsureProvisionedAsync(userId, email, context.HttpContext.RequestAborted);
+                        identity.AddClaim(new Claim(ClientClaimTypes.Role, user.Role.ToString()));
                     }
                 };
             });

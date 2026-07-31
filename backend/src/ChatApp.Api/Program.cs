@@ -6,6 +6,7 @@ using ChatApp.Api.Realtime;
 using ChatApp.Application;
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Memory;
+using ChatApp.Application.Users;
 using ChatApp.Infrastructure;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
@@ -38,6 +39,7 @@ builder.Services.AddOptions<ConversationMemoryOptions>()
                 .Bind(builder.Configuration.GetSection(nameof(ConversationMemoryOptions)))
                 .ValidateOnStart();
 builder.Services.AddScoped<ConversationMemoryService>();
+builder.Services.AddScoped<UserProvisioningService>();
 
 builder.Services.AddChatAppAuthentication(builder.Configuration);
 builder.Services.AddAuthorization();

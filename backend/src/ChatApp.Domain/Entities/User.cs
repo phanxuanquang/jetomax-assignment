@@ -9,9 +9,11 @@ namespace ChatApp.Domain.Entities;
 public sealed class User
 {
     /// <summary>
-    /// Unique identifier; equals the Supabase auth user id.
+    /// Unique identifier; equals the Supabase auth user id. Unlike sibling entities, this must be
+    /// settable (not self-generated) since it has to match an id that already exists in Supabase's
+    /// own auth.users table.
     /// </summary>
-    public Guid Id { get; } = Guid.NewGuid();
+    public Guid Id { get; init; } = Guid.NewGuid();
 
     /// <summary>
     /// Unique login handle; the user's public identity. Format and uniqueness are enforced by
