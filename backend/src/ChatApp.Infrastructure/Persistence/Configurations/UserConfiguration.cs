@@ -15,8 +15,20 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Id).HasColumnName("id").ValueGeneratedNever();
 
         builder.Property(u => u.Username).HasColumnName("username").IsRequired();
-        builder.Property(u => u.IsAgent).HasColumnName("is_agent").IsRequired();
         builder.Property(u => u.CreatedTime).HasColumnName("created_time").IsRequired();
+
+        // Role physically lives in the companion user_roles table (1:1 via a shared key — user_roles.user_id
+        // = profiles.id), not on profiles itself. Entity splitting maps it onto this same User aggregate
+        // instead of a separate Domain type, matching schema.sql exactly while keeping User one pure model.
+        // Conversion/required-ness are property-level facets (configured on the main PropertyBuilder);
+        // the split-table builder itself only accepts per-table column facets (e.g. HasColumnName).
+        builder.Property(u => u.Role).HasConversion<string>().IsRequired();
+
+        builder.SplitToTable("user_roles", userRoles =>
+        {
+            userRoles.Property(u => u.Id).HasColumnName("user_id");
+            userRoles.Property(u => u.Role).HasColumnName("role");
+        });
 
         builder.HasMany(u => u.OwnedConversations)
             .WithOne(c => c.Owner)

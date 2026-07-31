@@ -31,7 +31,7 @@ public static class DependencyInjection
                 .ValidateOnStart();
         services.AddHttpClient<IStorageClient, SupabaseStorageClient>();
 
-        services.AddScoped<IGenerativeAiService, GeminiGenerativeAiService>();
+        services.AddScoped<IGenerativeAiService, GenerativeAiService>();
         return services;
     }
 }
