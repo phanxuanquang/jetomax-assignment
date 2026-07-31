@@ -201,6 +201,8 @@ A brand-new conversation always starts with ≥ 2 participants, so it's never pe
 
 Conversation-creation bookkeeping (owner-as-participant, the 1:1 `conversation_memory` row) is done by the application layer, not a trigger — keeps it testable without a live database.
 
+**Backend-side fallback.** The backend's JWT validation (`OnTokenValidated`) also provisions a profile if a validated caller has none, using the same username-derivation rule — a defense-in-depth backstop if this trigger is ever missing, disabled, or out of sync with the schema, so a valid Supabase login is never blocked by that alone.
+
 ---
 
 ## Row-Level Security
