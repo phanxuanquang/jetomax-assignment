@@ -3,6 +3,7 @@ using ChatApp.Application.Common.Results;
 using ChatApp.Application.Memory;
 using ChatApp.Domain.Entities;
 using MediatR;
+using Microsoft.Extensions.Logging;
 
 namespace ChatApp.Application.Features.Messages.SendImage;
 
@@ -12,7 +13,8 @@ public sealed class Handler(
     IConversationAccess conversationAccess,
     IStorageClient storageClient,
     IGenerativeAiService generativeAiService,
-    IConversationNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
+    IConversationNotifier notifier,
+    ILogger<Handler> logger) : IRequestHandler<Command, Result<MessageDto>>
 {
     private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(8);
 
@@ -61,8 +63,9 @@ public sealed class Handler(
             var bytes = await storageClient.DownloadAsync(imageUrl, timeoutCts.Token);
             return await generativeAiService.GenerateContentFromImageAsync<string>(AnalysisPrompt, bytes, AnalysisSystemInstruction, cancellationToken: timeoutCts.Token);
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
+            logger.LogWarning(ex, "Image captioning failed for {ImageUrl}; sending without a caption.", imageUrl);
             return null;
         }
     }
