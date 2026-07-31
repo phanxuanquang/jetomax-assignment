@@ -1,16 +1,16 @@
-# MCP Integration (ChatGPT)
+# MCP Integration
 
-The MCP server is a **separate deployable** that exposes tools to ChatGPT and fulfils them by calling this backend's REST API — never talking to the database directly. All business logic stays in the backend; the MCP server is just a protocol adapter.
+The MCP server is a **separate deployable** that exposes tools to LLM platforms and fulfils them by calling this backend's REST API — never talking to the database directly. All business logic stays in the backend; the MCP server is just a protocol adapter.
 
 ```mermaid
 flowchart LR
-    GPT["ChatGPT<br/>(Developer Mode)"] -->|MCP /mcp| MCPS["MCP server<br/>(separate deployable)"]
+    GPT["LLM Platform"] -->|OAuth + MCP /mcp| MCPS["MCP server<br/>(separate deployable)"]
     MCPS -->|REST + service key| API["Backend API"]
 ```
 
-## Connecting to ChatGPT
+## Example: Connecting to ChatGPT
 
-The server is added as a remote connector at its `https://…/mcp` route via ChatGPT **Developer Mode** (Plus/Pro/Team/Enterprise). ChatGPT's default connector mode only calls the standard `search`/`fetch` tools — custom tools require Developer Mode — so the server ships both the standard pair and the custom tools, working in either mode.
+The server is added as a remote connector at its `https://…/mcp` route via ChatGPT **Developer Mode** (Plus/Pro/Team/Enterprise). There's no standard `search`/`fetch` pair (see the tools table below), so this only works via Developer Mode's custom tool calling, not ChatGPT's default connector mode.
 
 Reference: [Building MCP servers for ChatGPT](https://platform.openai.com/docs/mcp) · [Model Context Protocol](https://modelcontextprotocol.io/) · [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)
 
@@ -18,28 +18,28 @@ Reference: [Building MCP servers for ChatGPT](https://platform.openai.com/docs/m
 
 | Tool | Input | Backend call |
 |---|---|---|
-| `search` | `query` | `GET /api/conversations?q=<query>` |
-| `fetch` | `id` | `GET /api/conversations/{id}/messages` |
-| `list_conversations` | — | `GET /api/conversations` (empty query) |
-| `summarize_thread` | `conversationId` | `POST /api/conversations/{id}/summary` |
-| `join_group` | `publicId` | `POST /api/conversations/join` |
+| `list_joined_conversations` | `query` | `GET /api/conversations?q=<query>` |
+| `fetch_conversation_messages` | `conversationId`, `beforeMessageId?`, `limit?` | `GET /api/conversations/{id}/messages` |
+| `get_conversation_summarization` | `conversationId` | `POST /api/conversations/{id}/summary` |
+| `join_conversation` | `publicId` | `POST /api/conversations/join` |
 
-`search` and `list_conversations` hit the same backend operation — an empty query returns everything, a non-empty one filters.
+There is no standard `search`/`fetch` pair — see [mcp/README.md](../mcp/README.md#tools) for what that trades off against ChatGPT's default (non-Developer-Mode) connector calling convention.
 
 ## Auth model
 
-The MCP server authenticates each ChatGPT user itself, then calls the backend with the `Mcp` service key plus that user's backend **username** — the backend resolves a real user and applies the exact same membership, ownership, and role-based rules ([architecture §6](backend-system-design-and-architecture.md#6-authentication--authorization)) it would for that user calling directly.
+Two separate authentication concerns, not one:
 
-```
-X-Client-Key: <Clients:McpKey value>
-X-On-Behalf-Of: <username>
-```
+1. **MCP server → backend**: always as **one fixed, configured account** — there is no per-caller mapping. Every tool call sends:
+   ```
+   X-Client-Key: <Clients:McpKey value>
+   X-On-Behalf-Of: <the one configured backend username>
+   ```
+   The backend resolves that user and applies the exact same membership, ownership, and role-based rules ([architecture §6](backend-system-design-and-architecture.md#6-authentication--authorization)) it would for that user calling directly.
 
-`X-Client-Key` authenticates the MCP server as a trusted service; `X-On-Behalf-Of` carries the username the request acts as. A username that doesn't resolve, or is missing, is rejected with `401`.
+2. **ChatGPT/Claude → MCP server**: real OAuth, since both platforms require it for remote MCP connectors. The MCP server doesn't issue tokens itself — it validates access tokens issued by [Auth0](https://auth0.com/) (a hosted authorization server) against a configured audience, publishing the standard [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery document so ChatGPT/Claude can find Auth0 automatically. A valid token only proves "this client completed Auth0 login" — it does not change which backend account gets used, since that's still the one fixed account from step 1.
 
-The MCP server owns its own mapping of "which ChatGPT/OAuth user maps to which backend username" — that mapping is entirely the MCP server's concern, not the backend's.
+See [mcp/README.md](../mcp/README.md) for the full Auth0 setup and connector instructions.
 
-## Open items
+## Implementation
 
-- MCP server project skeleton and hosting.
-- Exact `fetch` item shape for ChatGPT deep-research compatibility.
+The server lives at [`mcp/`](../mcp/) — see [mcp/README.md](../mcp/README.md) for the codebase layout, how to run/deploy it, and step-by-step setup for both ChatGPT and Claude.

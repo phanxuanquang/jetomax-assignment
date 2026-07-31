@@ -1,11 +1,5 @@
 # Backend System Design & Architecture
 
-How the backend is built and why. For *what* it must do, see [software-requirements-specification.md](software-requirements-specification.md); for the data model, see [database-design.md](database-design.md).
-
-> **Design philosophy.** The backend is a thin **logic plane**. Identity, file storage, and the database all live in Supabase. The backend never calls AI on its own initiative — only in response to a user action or a scheduled job.
-
-## Contents
-
 1. [Guiding principles](#1-guiding-principles)
 2. [Technology stack](#2-technology-stack)
 3. [System context](#3-system-context)
@@ -54,24 +48,24 @@ How the backend is built and why. For *what* it must do, see [software-requireme
 
 ```mermaid
 flowchart TB
-    subgraph Client["React + TS PWA"]
-        FE["Chat UI"]
+    subgraph Client["PWA"]
+        FE["Client Application"]
     end
-    subgraph BE["ASP.NET Core (.NET 10)"]
+    subgraph BE["ASP.NET Core"]
         RT["SignalR Hub"]
         API["REST controllers"]
-        SK["Semantic Kernel layer"]
-        DATA["EF Core"]
+        SK["Semantic Kernel"]
+        DATA["Entity Framework Core"]
     end
     subgraph SB["Supabase"]
-        AUTH["Auth (Google OAuth, issues JWT)"]
-        PG[("Postgres")]
+        AUTH["Auth (Google OAuth)"]
+        PG[("PostgreSQL")]
         ST["Storage"]
     end
-    GEM["Google Gemini"]
+    GEM["LLM Inference"]
     subgraph EXT["External clients"]
-        MCPS["MCP server → ChatGPT"]
-        N8N["n8n (daily job)"]
+        MCPS["MCP server → LLM"]
+        N8N["n8n"]
     end
 
     FE -->|sign in| AUTH
@@ -86,7 +80,7 @@ flowchart TB
     N8N -->|REST + service key| API
 ```
 
-The client authenticates with Supabase and reuses the same JWT for both REST and the SignalR connection. Images go straight from the browser to Storage; the backend only ever sees the resulting URL. MCP and n8n are external clients of the same REST API — see [mcp-integration.md](mcp-integration.md) and [n8n-workflow.md](n8n-workflow.md).
+The client authenticates with Supabase and reuses the same JWT for both REST and the SignalR connection. Images go straight from the browser to Storage; the backend only ever sees the resulting URL. MCP and n8n are external clients of the same REST API, refer to [mcp-integration.md](mcp-integration.md) and [n8n-workflow.md](n8n-workflow.md) for further details.
 
 ---
 
@@ -183,8 +177,6 @@ flowchart LR
 **Two rules keep this simple, on purpose:**
 - **A handler never injects `IMediator`.** Logic shared between slices is a plain class called directly (see [`ConversationMemoryService`](#8-conversation-memory-pipeline)) — not one handler dispatching another.
 - **Anything fired detached opens its own DI scope.** A request-scoped `IAppDbContext` is disposed when the request ends, and `DbContext` is not thread-safe, so background work never reuses the caller's scope.
-
-> **MediatR license.** MediatR v13+ is a commercial package with a free Community tier for small projects — see [mediatr.io](https://mediatr.io/) for eligibility. `Program.cs` silences its startup license-warning log; obtaining a Community key is a config change, not a code change.
 
 ---
 
@@ -289,7 +281,7 @@ If the process restarts mid-update, an in-flight fold can be lost — the next m
 | Path | Behavior |
 |---|---|
 | **Threshold fold** (write) | Once `pending_tokens` crosses a configured threshold, summarize the pending messages, fold the result into `global_memory`, reset the counter |
-| **On-demand summary** (pure read) | Return `global_memory` plus a fresh summary of everything since the last fold — never mutates stored memory. This is what powers the in-app "Summarize" action, the n8n digest, and (once built) the MCP `summarize_thread` tool |
+| **On-demand summary** (pure read) | Return `global_memory` plus a fresh summary of everything since the last fold — never mutates stored memory. This is what powers the in-app "Summarize" action, the n8n digest, and the MCP `get_conversation_summarization` tool |
 
 Because `global_memory` is always current, an on-demand summary only needs to summarize the *tail* since the last fold, not the whole conversation history — cost stays flat as history grows.
 

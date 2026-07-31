@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>a72e1c3d-9f4b-4d6e-8a11-2c9e7f3b5d60</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Pinned below 2.0.0 on purpose. 2.0.0 implements the 2026-07-28 protocol revision (per-request
+      _meta instead of a stateful initialize handshake); as of this pin, ChatGPT's connector sends a
+      request that declares protocolVersion 2025-11-25 but still attaches the 2026-07-28-only
+      `clientCapabilities` _meta key, which 2.0.0 rejects outright (JSON-RPC -32600) before any tool
+      call is even attempted - reproduced with both Stateless=true and Stateless=false. 1.4.1 predates
+      that strict per-request _meta validation, so it accepts the same request. Retry 2.0.0+ once
+      ChatGPT's connector (or a newer SDK patch) fixes this mismatch.
+    -->
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
+  </ItemGroup>
+
+</Project>

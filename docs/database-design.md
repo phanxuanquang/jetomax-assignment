@@ -28,7 +28,7 @@ erDiagram
         text username UK
     }
     user_roles {
-        uuid user_id PK_FK
+        uuid user_id PK, FK
         text role "Administrator | Moderator | User"
     }
     conversations {
@@ -82,10 +82,8 @@ erDiagram
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | uuid | PK | equals the Supabase auth user id |
-| `username` | text | unique, `~ '^[A-Za-z0-9]{1,30}$'` | auto-derived from the Google email's local-part at sign-up (sanitized, numeric suffix on collision) — never user-chosen |
+| `username` | text | unique | auto-derived from the Google email's local-part at sign-up |
 | `created_time` | timestamptz | not null, default `now()` | |
-
-Only `username` identifies a user throughout the system — the sign-in email is used once, at sign-up, to derive it and is never stored.
 
 ### user_roles
 
@@ -95,7 +93,7 @@ Only `username` identifies a user throughout the system — the sign-in email is
 | `role` | text | not null, default `'User'`, check in (`Administrator`, `Moderator`, `User`) | gates API authorization only — Postgres RLS stays membership-based, not role-based |
 | `assigned_at` | timestamptz | not null, default `now()` | |
 
-Every new user gets `User` by default via the `handle_new_user` trigger. Promoting an account to `Moderator`/`Administrator` is a manual database operation — there is deliberately no self-service "change my role" endpoint.
+Every new user gets `User` by default via the `handle_new_user` trigger. Promoting an account to `Moderator`/`Administrator` is a manual database operation.
 
 ### conversations
 
@@ -227,10 +225,6 @@ can_join(conv)        -- owner_id IS NOT NULL AND is_deleted = false
 | `conversation_memory` / `chunk_memories` | `is_participant` | service role | service role | service role |
 
 `profiles_public` is a plain view (`select id, username from profiles`) granted to `authenticated`/`anon` — this is what a username-to-id lookup (creating a conversation, adding participants) queries.
-
-> **What RLS actually protects.** All app traffic goes through the .NET backend, which connects with a **service role that bypasses RLS** — these policies are not a second check on backend queries. They exist because Supabase also exposes PostgREST directly to the internet, and the anon key ships in the frontend bundle: without RLS, anyone holding that key could read every table directly.
->
-> Two consequences: authorization for backend traffic is enforced entirely in the application handlers, not RLS. And if the backend is ever pointed at a role RLS *does* apply to, `auth.uid()` becomes `NULL` for that session and every policy evaluates false — queries return **zero rows silently** rather than erroring. Check the connection role first if data seems to vanish.
 
 ---
 

@@ -156,7 +156,7 @@ flowchart TD
 
 ### F-7 · Conversation summarization
 
-**Behavior.** The system maintains a rolling background summary per conversation (see [architecture §8](backend-system-design-and-architecture.md#8-conversation-memory-pipeline)), so a summary is cheap to produce on demand. One endpoint serves three callers: the in-app "Summarize" action, the MCP `summarize_thread` tool, and the n8n daily digest.
+**Behavior.** The system maintains a rolling background summary per conversation (see [architecture §8](backend-system-design-and-architecture.md#8-conversation-memory-pipeline)), so a summary is cheap to produce on demand. One endpoint serves three callers: the in-app "Summarize" action, the MCP `get_conversation_summarization` tool, and the n8n daily digest.
 
 **Acceptance.** Summarization never blocks message sending; an on-demand summary reflects everything up to the request moment; ChatGPT obtains the same summary via MCP as the in-app action does.
 
@@ -193,15 +193,16 @@ flowchart TD
 
 ### 6.1 ChatGPT via MCP
 
-A remote MCP server (`/mcp`, HTTPS) is added to ChatGPT via Developer Mode. It exposes both the standard `search`/`fetch` pair and three custom tools:
+A remote MCP server (`/mcp`, HTTPS, OAuth-protected) is added to ChatGPT via Developer Mode:
 
 | ChatGPT capability | MCP tool |
 |---|---|
-| Display all conversations | `list_conversations` |
-| Summarize a selected thread | `summarize_thread` |
-| Join a group chat | `join_group` |
+| List conversations | `list_joined_conversations` |
+| Read a conversation's messages | `fetch_conversation_messages` |
+| Summarize a selected thread | `get_conversation_summarization` |
+| Join a group chat | `join_conversation` |
 
-**Acceptance.** The `/mcp` URL can be added as a connector; ChatGPT can list conversations, summarize a named thread, and join a group. Full design: [mcp-integration.md](mcp-integration.md).
+**Acceptance.** The `/mcp` URL can be added as a connector; ChatGPT can list conversations, read/summarize a thread, and join a group. Full design: [mcp-integration.md](mcp-integration.md).
 
 ### 6.2 n8n daily digest
 

@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/mcp/">
+    <Project Path="../mcp/ChatApp.Mcp.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/ChatApp.Api/ChatApp.Api.csproj" Id="eb10e02a-0e62-42cc-b86d-79904ec25b5a" />
     <Project Path="src/ChatApp.Application/ChatApp.Application.csproj" Id="ac0de9fb-3259-42f6-94d7-6d666e69f533" />
