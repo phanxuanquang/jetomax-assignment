@@ -14,13 +14,26 @@ create extension if not exists pgcrypto;   -- gen_random_uuid()
 -- -----------------------------------------------------------------------------
 
 -- Users. profiles.id equals auth.users.id in Supabase (see trigger in §4).
+-- Google OAuth only: username is auto-derived from the email local-part
+-- (decision, see backend-system-design-and-architecture.md §4.2).
 create table if not exists profiles (
     id            uuid primary key default gen_random_uuid(),
     username      text not null unique
                       check (username ~ '^[A-Za-z0-9]{1,30}$'),   -- letters+digits, <=30
+    email         text not null unique,                            -- from Google; duplicated here for app-level queries
     is_agent      boolean not null default false,                 -- reserved for AI-posted messages (unused)
     created_time  timestamptz not null default now()
 );
+
+-- One role per user. A separate table (rather than a column on profiles) so
+-- role assignment/history stays independent of the core profile entity.
+create table if not exists user_roles (
+    user_id      uuid primary key references profiles(id) on delete cascade,
+    role         text not null default 'User'
+                     check (role in ('Administrator', 'Moderator', 'User')),
+    assigned_at  timestamptz not null default now()
+);
+
 
 -- Conversations. owner_id NULL == frozen (owner left & chose freeze).
 create table if not exists conversations (
@@ -155,16 +168,39 @@ create trigger messages_after_insert
 
 -- -----------------------------------------------------------------------------
 -- 4. SUPABASE AUTH -> PROFILE  (skipped automatically on plain Postgres)
+--    Google OAuth is the ONLY sign-in method (decision, §4.2). Google always
+--    supplies a verified email; username is auto-derived from its local-part
+--    (the part before '@'), sanitized to the existing format rule, with a
+--    numeric-suffix fallback if two different domains collide on the same
+--    local-part (e.g. alice@gmail.com and alice@work.com).
 -- -----------------------------------------------------------------------------
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare
+    base_username text;
+    candidate     text;
+    suffix        int := 0;
 begin
-    insert into public.profiles (id, username)
-    values (
-        new.id,
-        coalesce(new.raw_user_meta_data->>'username', 'user' || left(replace(new.id::text,'-',''), 12))
-    )
+    base_username := lower(regexp_replace(split_part(new.email, '@', 1), '[^A-Za-z0-9]', '', 'g'));
+    if base_username is null or base_username = '' then
+        base_username := 'user' || left(replace(new.id::text, '-', ''), 8);
+    end if;
+    base_username := left(base_username, 30);
+
+    candidate := base_username;
+    while exists (select 1 from public.profiles where username = candidate) loop
+        suffix := suffix + 1;
+        candidate := left(base_username, greatest(1, 30 - length(suffix::text))) || suffix::text;
+    end loop;
+
+    insert into public.profiles (id, username, email)
+    values (new.id, candidate, new.email)
     on conflict (id) do nothing;
+
+    insert into public.user_roles (user_id, role)
+    values (new.id, 'User')
+    on conflict (user_id) do nothing;
+
     return new;
 end;
 $$;
@@ -184,9 +220,13 @@ end $$;
 -- 5. SEED — a hidden system user reserved for AI-posted messages
 --    (not currently used by any feature — see database-design.md)
 -- -----------------------------------------------------------------------------
-insert into profiles (id, username, is_agent)
-values ('00000000-0000-0000-0000-000000000001', 'aiagent', true)
+insert into profiles (id, username, email, is_agent)
+values ('00000000-0000-0000-0000-000000000001', 'aiagent', 'aiagent@system.local', true)
 on conflict (id) do nothing;
+
+insert into user_roles (user_id, role)
+values ('00000000-0000-0000-0000-000000000001', 'User')
+on conflict (user_id) do nothing;
 
 -- -----------------------------------------------------------------------------
 -- 6. ROW-LEVEL SECURITY  (Supabase: auth.uid() = current user)
@@ -223,13 +263,40 @@ alter table text_messages        enable row level security;
 alter table image_messages       enable row level security;
 alter table conversation_memory  enable row level security;
 alter table chunk_memories       enable row level security;
+alter table user_roles           enable row level security;
 
--- profiles: everyone reads (names); edit only your own
+-- profiles: base table read is OWN ROW ONLY — profiles now carries `email`,
+-- a PII field the old "everyone reads" policy would have exposed to anyone
+-- holding the public anon key. Other users' safe, public fields (id,
+-- username, is_agent) are exposed instead through `profiles_public` below.
 drop policy if exists profiles_select on profiles;
-create policy profiles_select on profiles for select using (true);
+create policy profiles_select on profiles for select using (auth.uid() = id);
 drop policy if exists profiles_update on profiles;
 create policy profiles_update on profiles for update
     using (auth.uid() = id) with check (auth.uid() = id);
+
+-- Safe subset of profiles, readable by anyone — this is what username-based
+-- lookups (create conversation, add participants) and the backend's own
+-- REST layer query, so no path (direct PostgREST or the .NET API) needs to
+-- read another user's email.
+create or replace view public.profiles_public as
+    select id, username, is_agent from public.profiles;
+do $$
+begin
+    if exists (select 1 from pg_roles where rolname = 'authenticated') then
+        grant select on public.profiles_public to authenticated;
+    end if;
+    if exists (select 1 from pg_roles where rolname = 'anon') then
+        grant select on public.profiles_public to anon;
+    end if;
+end $$;
+
+-- user_roles: users may read only their OWN role. No insert/update/delete
+-- policy is granted to authenticated/anon on purpose — RLS defaults to deny,
+-- so a user cannot self-escalate their role via the anon key; only the
+-- service role (bypasses RLS) or the handle_new_user trigger can write here.
+drop policy if exists user_roles_select on user_roles;
+create policy user_roles_select on user_roles for select using (auth.uid() = user_id);
 
 -- conversations: participants read (non-deleted); creator inserts as owner;
 --                owner updates (rename / readonly / transfer / soft-delete / freeze)

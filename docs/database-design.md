@@ -15,6 +15,7 @@ erDiagram
     profiles ||--o{ participants : joins
     profiles ||--o{ messages : sends
     profiles |o--o{ conversations : owns
+    profiles ||--|| user_roles : has
     conversations ||--o{ participants : has
     conversations ||--o{ messages : holds
     conversations ||--|| conversation_memory : owns
@@ -26,7 +27,13 @@ erDiagram
     profiles {
         uuid id PK
         text username UK
+        text email UK
         bool is_agent
+    }
+    user_roles {
+        uuid user_id PK_FK
+        text role "Administrator | Moderator | User"
+        timestamptz assigned_at
     }
     conversations {
         uuid id PK
@@ -72,7 +79,7 @@ erDiagram
     }
 ```
 
-Eight tables: users, conversations, participants, a table-per-type message trio, and two memory tables.
+Nine tables: users, user roles, conversations, participants, a table-per-type message trio, and two memory tables.
 
 ---
 
@@ -82,9 +89,19 @@ Eight tables: users, conversations, participants, a table-per-type message trio,
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | uuid | PK | = Supabase auth id |
-| `username` | text | **unique**, `~ '^[A-Za-z0-9]{1,30}$'` | letters + digits, ≤30; the user's public handle |
+| `username` | text | **unique**, `~ '^[A-Za-z0-9]{1,30}$'` | letters + digits, ≤30; **auto-derived from the Google email's local-part** at sign-up (sanitized, numeric-suffix on collision — see the `handle_new_user` trigger). Not user-chosen. |
+| `email` | text | **unique**, not null | from Google OAuth; duplicated onto `profiles` for app-level queries. **PII — not broadly readable**, see RLS below |
 | `is_agent` | boolean | not null, default false | hidden system user reserved for AI-posted messages — **not currently used by any feature** (see note) |
 | `created_time` | timestamptz | not null, default now() | |
+
+### user_roles
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `user_id` | uuid | PK, FK → profiles, on delete cascade | one row per user (1:1) |
+| `role` | text | not null, default `'User'`, check in (`Administrator`,`Moderator`,`User`) | gates API authorization (`[AllowedRoles]`, see architecture §4.2) — **not** used for Postgres RLS, which stays membership-based |
+| `assigned_at` | timestamptz | not null, default now() | |
+
+Every new user is assigned `User` by default via the `handle_new_user` trigger. Promoting someone to `Moderator`/`Administrator` is a manual operation (direct DB update by whoever has Postgres access) — **no self-service "change my role" or "promote a user" API endpoint exists**; add one deliberately if that becomes a product requirement, don't assume it.
 
 ### conversations
 | Column | Type | Constraints | Notes |
@@ -241,12 +258,15 @@ Policy summary (`auth.uid()` = current user):
 
 | Table | Select | Insert | Update | Delete |
 |---|---|---|---|---|
-| profiles | everyone | own row | own row | — |
+| profiles | **own row only** (`auth.uid() = id`) — protects `email`. Other users' safe fields (`id`, `username`, `is_agent`) are read through the **`profiles_public`** view instead | own row | own row | — |
+| user_roles | **own row only** (`auth.uid() = user_id`) | — (trigger/service role only) | — (no policy — **cannot self-escalate**; only service role or the trigger can write) | — |
 | conversations | `is_participant(id)` & not deleted | `owner_id = auth.uid()` | `is_owner(id)` (rename / readonly / transfer / soft-delete / freeze) | — (soft delete via update) |
 | participants | `is_participant(conversation_id)` | `is_owner(...)` **or** self-join (`user_id=auth.uid()` & `can_join`) | — | `is_owner(...)` **or** self-leave |
 | messages | `is_participant(conversation_id)` | sender is self, participant, and not blocked by readonly (unless owner) | — | — |
 | text_messages / image_messages | participant of parent's conversation | caller owns the parent message | service role (caption) | — |
 | conversation_memory / chunk_memories | `is_participant(conversation_id)` | service role | service role | service role |
+
+`profiles_public` is a plain view (`select id, username, is_agent from profiles`) granted to `authenticated`/`anon` — this is what a **username → id lookup** (create conversation, add participants — see architecture §9.2) queries, so no code path ever needs to read another user's email.
 
 Background writes (memory worker) and the caption write on image send run with the **service role**, which bypasses RLS by design.
 

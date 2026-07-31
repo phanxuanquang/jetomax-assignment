@@ -17,8 +17,10 @@ A **realtime chat application** where users message each other one-to-one, creat
 | Term | Meaning |
 |---|---|
 | PWA | Progressive Web App — one web build installable on PC, iOS, Android |
-| JWT | Signed token issued by Supabase Auth, carried on every request |
-| Username | Login handle; letters + digits only, ≤30 chars, unique |
+| JWT | Signed token issued by Supabase Auth (Google OAuth), carried on every request |
+| Email | The Google account's email; unique, required, sign-in identity |
+| Username | Public handle; letters + digits only, ≤30 chars, unique — **auto-derived from the email's local-part** at sign-up, not user-chosen |
+| UserRole | System-wide permission tier: `Administrator` \| `Moderator` \| `User` (every account has exactly one, default `User`). **Distinct from "Owner"/"Member" below**, which are per-conversation, not system-wide |
 | Owner | The creator of a conversation; **transferable**; `null` owner ⟺ **frozen** |
 | PublicId | 6-char case-sensitive alphanumeric code used to join a conversation |
 | Member | A participant of a conversation |
@@ -114,9 +116,14 @@ flowchart LR
 Each feature: description, behavior, acceptance criteria, edge cases.
 
 ### F-1 · Registration & authentication
-**Behavior.** Sign-up and sign-in via Supabase Auth, which issues a JWT; a profile is created on first sign-up. Each user is identified by a unique **Username** (letters + digits only, ≤30 chars); there is no separate display name. Every request carries the JWT.
-**Acceptance.** A new user can register with a valid, unique username and sign in; a profile exists; invalid or duplicate usernames are rejected; unauthenticated requests are rejected.
-**Edge cases.** Username with non-alphanumeric characters or >30 chars rejected; duplicate username rejected.
+**Behavior.** Sign-in is **exclusively "Sign in with Google"** via Supabase Auth (Google OAuth) — there is no email/password or any other provider. On first sign-in, a profile is created automatically: **Username is auto-derived from the Google email's local-part** (the part before `@`), sanitized to letters+digits and deduplicated with a numeric suffix if another account already derived the same username from a different email domain (e.g. `alice@gmail.com` and `alice@work.com` → `alice`, `alice1`). The email itself is stored and must be unique. Every new account is assigned the `User` role by default (see F-1a). Every request carries the resulting JWT.
+**Acceptance.** A new Google account signing in for the first time gets a profile with a valid, unique, auto-derived username and a `User` role, with no separate sign-up step; a returning user signs in and reaches the same profile; unauthenticated requests are rejected.
+**Edge cases.** An email whose local-part sanitizes to nothing (e.g. all-symbol) falls back to a generated placeholder username; a second account colliding on the same derived username gets a numeric suffix; email uniqueness is enforced (a Google account can only ever map to one profile).
+
+### F-1a · Roles & authorization
+**Behavior.** Every user has exactly one **UserRole**: `Administrator`, `Moderator`, or `User` (default). The role — not which client (app, ChatGPT/MCP, or the n8n workflow) made the call — decides what an authenticated request may do. MCP and n8n calls are **always on behalf of a specific real user** (no anonymous/system-wide calls), and that user's role is what's checked.
+**Acceptance.** A `User`-role account can use all ordinary chat features; only `Administrator` accounts can reach the bulk/system-wide operations that power the n8n daily digest (listing every conversation, publishing the digest). Promoting an account to `Moderator`/`Administrator` is a manual, out-of-band operation — there is no self-service "become an admin" action.
+**Edge cases.** A `Moderator` today has the same permissions as `User` — the tier exists for future use, no feature currently distinguishes them; don't assume otherwise.
 
 ### F-2 · Direct & real-time messaging
 **Behavior.** Users chat 1:1 or in groups over a persistent WebSocket (SignalR). The server persists each message, then broadcasts it to all members. History is paginated via REST; the database is the source of truth, so reconnecting clients recover correct state.
@@ -124,9 +131,9 @@ Each feature: description, behavior, acceptance criteria, edge cases.
 **Edge cases.** Messages from a member who later leaves remain in history.
 
 ### F-3 · Create & join conversations
-**Behavior.** A user **creates** a conversation by adding **1 or more** other participants (2 people = direct chat, more = group), becoming its owner. The backend auto-generates a unique 6-char `PublicId` and an initial `DisplayName` from the owner's and up to two other participants' usernames (e.g. `alice, bob`). A `DisplayName` may contain letters, digits, commas, and spaces. A user **joins** an existing conversation by entering its exact `PublicId`.
+**Behavior.** A user **creates** a conversation by adding **1 or more** other participants, **identified by their `Username`** (2 people = direct chat, more = group), becoming its owner. The backend auto-generates a unique 6-char `PublicId` and an initial `DisplayName` from the owner's and up to two other participants' usernames (e.g. `alice, bob`). A `DisplayName` may contain letters, digits, commas, and spaces. A user **joins** an existing conversation by entering its exact `PublicId`.
 **Acceptance.** Creating yields a conversation with a unique PublicId and generated name, and the creator can chat immediately; entering a valid PublicId of a joinable conversation adds the user and shows history + live messages.
-**Edge cases.** Creating with no other participant is rejected; joining with a wrong/nonexistent PublicId fails cleanly; joining a **frozen** or deleted conversation is rejected; joining one already joined is a no-op.
+**Edge cases.** Creating with no other participant is rejected; creating with an unknown username is rejected (404, whole request fails together — no partial creation); joining with a wrong/nonexistent PublicId fails cleanly; joining a **frozen** or deleted conversation is rejected; joining one already joined is a no-op.
 
 ### F-4 · Ownership & lifecycle
 **Ownership.** Each conversation has **one owner = its creator**, but ownership is **transferable** to another participant. A conversation with **no owner** (`owner_id = null`) is **frozen**.
@@ -135,10 +142,10 @@ Each feature: description, behavior, acceptance criteria, edge cases.
 |---|---|
 | Send / read messages | any participant (send blocked when readonly, except owner) |
 | Join (by PublicId) | any user, if not frozen/deleted |
-| Add / remove participant | **owner only** |
+| Add / remove participant (**by `Username`**) | **owner only** |
 | Rename `DisplayName` | **owner only** |
 | Set `IsReadonly` | **owner only** |
-| Transfer ownership | **owner only** (to a participant) |
+| Transfer ownership (**by `Username`**) | **owner only** (to a participant) |
 | Leave (self) | any participant |
 | Delete (soft) or Freeze | **owner**, via leaving |
 
@@ -250,7 +257,7 @@ A GitHub repo with the app, MCP server, and n8n workflow; a README enabling a fr
 | Requirement | Fulfilled by | Verified by |
 |---|---|---|
 | Cross-platform (§2.1) | React + TS PWA | Installable on desktop + mobile |
-| F-1…F-6 | Backend + client features | Acceptance criteria above |
+| F-1…F-6, F-1a | Backend + client features | Acceptance criteria above |
 | Create / join (F-3) | `POST /conversations`, `POST /conversations/join` (by PublicId) | Create-then-chat, join-then-see-history |
 | MCP (§6.1) | MCP server + tools | ChatGPT lists / summarizes / joins |
 | n8n (§6.2) | `workflow.json` | Web page + Google Sheet updated |

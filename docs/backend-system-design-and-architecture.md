@@ -48,10 +48,10 @@ Seven rules enforced everywhere; they explain most decisions below.
 | Client | React + TypeScript PWA (Vite) | One codebase → PC / iOS / Android |
 | Backend | ASP.NET Core (.NET 10) + SignalR, controllers | Native realtime for .NET; controllers enable the access-control attribute (§4.2) |
 | App mediator | MediatR | One handler per use case, shared across REST / SignalR / MCP transports (§4.1) |
-| Data plane | Supabase (Postgres + Auth + Storage) | Auth, storage, DB batteries-included |
+| Data plane | Supabase (Postgres + Auth + Storage) | Auth (**Google OAuth only** — no password auth), storage, DB batteries-included |
 | ORM | EF Core + Npgsql | Type-safe Postgres access |
 | AI orchestration | Semantic Kernel | Thin, swappable AI service layer |
-| AI model | **Google Gemini `gemini-2.5-flash`** via SK's `Microsoft.SemanticKernel.Connectors.Google` | One cheap multimodal model for image captioning (vision) + summaries |
+| AI model | **Google Gemini** (currently `gemini-3.5-flash-lite`, config-driven — see `prerequisite-setups.md` on model churn) via SK's `Microsoft.SemanticKernel.Connectors.Google` | One cheap multimodal model for image captioning (vision) + summaries |
 | Integration | MCP server (C#) + n8n | ChatGPT connector + scheduled digests |
 
 > **Semantic Kernel vs Agent Framework.** As of April 2026, Microsoft Agent Framework (MAF) is the GA successor and SK is in maintenance mode (supported ≥1 year). SK is chosen intentionally: the AI needs here are single, stateless calls — no agents or multi-agent workflows — so SK's service layer is right-sized. MAF would be over-engineering for this scope.
@@ -77,7 +77,7 @@ flowchart TB
         PG[("Postgres")]
         ST["Storage"]
     end
-    GEM["Google Gemini<br/>(gemini-2.5-flash)"]
+    GEM["Google Gemini<br/>(model configurable)"]
 
     subgraph EXT["External API clients"]
         MCPS["MCP server → ChatGPT"]
@@ -145,7 +145,7 @@ Every use case is a MediatR **command** (write) or **query** (read) with exactly
 | `Internal.SummarizeConversation` (single thread) | query | REST, MCP, n8n |
 | `Internal.GetAllConversations`, `Internal.SummarizeConversations` (24 h roll-up), `Internal.PublishDigest` | query/command | n8n |
 
-> **`Internal` is a code namespace, not an access boundary** (decision B-1): `SummarizeConversation` lives there but is reachable by App / Mcp / N8n; only `GetAllConversations`, `SummarizeConversations` and `PublishDigest` are n8n-only. Access is decided per-endpoint by `[AllowedClients]` (§4.2), not by the folder name.
+> **`Internal` is a code namespace, not an access boundary** (decision B-1): `SummarizeConversation` lives there but is reachable by any `User`-role caller from App/Mcp/N8n; only `GetAllConversations`, `SummarizeConversations` and `PublishDigest` require `Administrator`. Access is decided per-endpoint by `[AllowedRoles]` (§4.2), not by the folder name.
 
 Slices are named by namespace (`Features/<Area>/<UseCase>/{Command|Query, Handler, Validator}`), so the type names are short and repeated across folders. Api controllers disambiguate with `using` aliases — record this as a team convention.
 
@@ -163,52 +163,69 @@ To avoid over-engineering, only **one** pipeline behavior is added — `Validati
 > - **Without a license key it still runs** (no runtime limits), but it **logs a licensing warning on every startup**. Register a free Community key (`cfg.LicenseKey`, or the `MEDIATR_LICENSE_KEY` environment variable), or silence it with `builder.Logging.AddFilter("LuckyPennySoftware.MediatR.License", LogLevel.None)`.
 > - It pulls the `Microsoft.IdentityModel.*` JWT stack into Application transitively, purely to validate that key. Nothing in the business logic uses it. `LoggingBehavior` also gets `ILogger<T>` only transitively through MediatR — add an **explicit** `PackageReference` for `Microsoft.Extensions.Logging.Abstractions` so the logging behavior does not depend on the mediator choice.
 
-### 4.2 Client access control
+### 4.2 Role-based access control
 
-Three client types call the backend; not every client may call every endpoint. Client identity is resolved from the authentication scheme and expressed as a claim, then checked by a single attribute.
+Every call — from the app, from MCP, or from n8n — is **on behalf of a real, authenticated user** (decision, replacing the earlier client-type model). There is no more "no identity" case: MCP and n8n both authenticate with a service key **plus** an on-behalf-of user, exactly like the app authenticates with a JWT. What differs between them is only *how the caller's identity is established* (the authentication scheme); what an endpoint allows is decided purely by **`UserRole`** (`Administrator` | `Moderator` | `User`), not by which channel the call arrived through.
 
-> **Layer ownership.** The `Client` enum and this whole check live in **`ChatApp.Api`**. The Application layer is deliberately unaware of which client called it — `IConversationAccess` exposes the caller's user identity as a synchronous `Guid? UserId` (plus the owner/readonly access guards, and a `GetCurrentUserAsync()` used only by `Create`, which needs the owner's `Username` for display-name generation). Consequence to respect: an Application handler must **never infer a client type**, in particular not by treating a failed identity lookup as "this must be n8n". `[AllowedClients]` is the single gate; handlers that need no user simply do not ask for one.
+> **Layer ownership.** `UserRole` and `[AllowedRoles]` live in **`ChatApp.Api`**. `IConversationAccess` exposes the resolved caller's `Guid UserId` and `UserRole Role` (no longer nullable — every request has resolved to a real user by the time a handler runs) plus the owner/readonly access guards.
+
+**How identity is established** (authentication — *who is calling*):
+
+| Channel | Credential | Resolves to |
+|---|---|---|
+| App | User's Supabase JWT (Bearer; Google OAuth-issued, validated via JWKS §11) | that user's id + role |
+| Mcp | Service key header (`X-Client-Key`) **+** `X-On-Behalf-Of: <username>` | the named user's id + role |
+| N8n | Service key header (`X-Client-Key`) **+** `X-On-Behalf-Of: <username>` | the named user's id + role |
+
+`X-On-Behalf-Of` now carries a **username** (not a raw id), consistent with the rest of the API (§9.2) — the Api layer resolves it to an id via `profiles_public` before building the identity. A service key without a resolvable on-behalf-of user is rejected (401) — there is no "system, no user" identity anymore.
+
+**What an endpoint allows** (authorization — *what that user may do*) is `[AllowedRoles]`, applicable at the **controller level** (default for every action in it) or the **action level** (overrides the controller default for that one action):
 
 ```csharp
-public enum Client { App, Mcp, N8n }   // declared in ChatApp.Api — Application is unaware of it
+public enum UserRole { Administrator, Moderator, User }
 
-// Usage on a controller or action:
-[AllowedClients(Client.App, Client.Mcp)]
-public class ConversationsController : ControllerBase { /* ... */ }
+// Applies to every action in the controller unless overridden below:
+[AllowedRoles(UserRole.User, UserRole.Moderator, UserRole.Administrator)]
+public class ConversationsController : ControllerBase
+{
+    // Narrower than the controller default — only Administrators may reach this one:
+    [AllowedRoles(UserRole.Administrator)]
+    [HttpGet("~/api/internal/conversations")]
+    public async Task<IActionResult> GetAllConversations() { /* ... */ }
+}
 ```
 
-**How the client is identified.**
-
-| Client | Credential | Resolves to |
-|---|---|---|
-| `App` | User's Supabase JWT (Bearer) | `Client.App` + user identity |
-| `Mcp` | Service key header + on-behalf-of user id | `Client.Mcp` + user identity |
-| `N8n` | Service key header | `Client.N8n` (no user) |
-
-An authentication step sets a `client` claim; `AllowedClientsAttribute` (an `IAuthorizationFilter`) reads it and returns 403 if the caller's client is not in the allowed set. Because it runs in the authorization pipeline, it composes with the normal user/ownership checks.
+No `[AllowedRoles]` anywhere (controller or action) means *any authenticated role* — i.e. the only requirement is a resolved identity, which `[Authorize]` already guarantees. Reserve the attribute for endpoints that need to be **narrower** than "any signed-in user".
 
 ```csharp
-public sealed class AllowedClientsAttribute(params Client[] allowed) : Attribute, IAuthorizationFilter
+public sealed class AllowedRolesAttribute(params UserRole[] allowed) : Attribute, IAuthorizationFilter
 {
     public void OnAuthorization(AuthorizationFilterContext ctx)
     {
-        var claim = ctx.HttpContext.User.FindFirst("client")?.Value;
-        if (!Enum.TryParse<Client>(claim, out var c) || !allowed.Contains(c))
+        // Action-level attribute wins over controller-level if both are present.
+        var effective = ctx.ActionDescriptor.EndpointMetadata
+            .OfType<AllowedRolesAttribute>()
+            .LastOrDefault() ?? this;
+        var role = ctx.HttpContext.User.FindFirst("role")?.Value;
+        if (!Enum.TryParse<UserRole>(role, out var r) || !effective.Allowed.Contains(r))
             ctx.Result = new ForbidResult();
     }
 }
 ```
 
-**Access matrix** (which client may call each endpoint):
+**Access matrix** (which role may call each endpoint group):
 
-| Endpoint group | App | Mcp | N8n |
+| Endpoint group | User | Moderator | Administrator |
 |---|---|---|---|
-| Send message / image, create / leave / delete group, add / remove member | ✓ | | |
-| Get conversations (+ search), join group | ✓ | ✓ | |
-| Summarize thread | ✓ | ✓ | ✓ |
-| Bulk "all threads" + publish digest (n8n only) | | | ✓ |
+| Send message / image, create / join / leave conversation | ✓ | ✓ | ✓ |
+| Owner-only actions (rename, set-readonly, transfer, add/remove participants) — gated additionally by *is this caller the owner* (§4.1's existing handler-level check, unchanged) | ✓ | ✓ | ✓ |
+| Get conversations (+ search), summarize thread | ✓ | ✓ | ✓ |
+| Bulk "all conversations" / cross-conversation roll-up / publish digest (the former n8n-only endpoints) | | | ✓ |
 
-This satisfies the rule that a User cannot reach n8n-only endpoints and n8n cannot reach user-only endpoints.
+The bottom row is the one deliberate narrowing: listing *every* conversation system-wide regardless of membership is a privileged, audit-style capability, so it's restricted to `Administrator` — whichever channel (App, Mcp, or N8n) the caller used to authenticate. There is currently no product feature that gives `Moderator` broader permissions than `User` — the role exists and can gate future endpoints, but nothing today actually restricts a `Moderator`-vs-`User` action differently. Don't invent one; add `[AllowedRoles]` to a specific endpoint only when a real requirement calls for it.
+
+**Security note to decide, not assume:** should MCP be allowed to act on behalf of an `Administrator`? If the Mcp service key ever leaks, an attacker could impersonate whichever username is passed in `X-On-Behalf-Of` — worth deciding whether Mcp's on-behalf-of is restricted to `User`/`Moderator` accounts only (rejecting an on-behalf-of Administrator), or left unrestricted. Not decided here — flagged for whoever implements this.
+
 
 ### 4.3 Validation & integrity
 
@@ -318,7 +335,7 @@ public interface IGenerativeAiService
 ```
 
 - **Prompts live in the Application layer** (decision A-2b): the caller composes the prompt string and calls this port; Infrastructure only executes it. The `Internal/*` handlers and the on-send caption path all go through this one port.
-- **Implementation (Infrastructure)** wraps **Google Gemini `gemini-2.5-flash`** via `Microsoft.SemanticKernel.Connectors.Google` (`AddGoogleAIGeminiChatCompletion`, experimental `SKEXP0070`). Gemini is multimodal, so the same model backs both the text and image overloads. Swapping providers is confined to this one adapter.
+- **Implementation (Infrastructure)** wraps **Google Gemini** via `Microsoft.SemanticKernel.Connectors.Google` (`AddGoogleAIGeminiChatCompletion`, experimental `SKEXP0070`). The model id is read from config (`Gemini:Model`), not hardcoded — Google has been retiring Gemini models faster than their published shutdown dates, so this needs to stay a config value, updated when the configured model 404s. Gemini is multimodal, so the same model backs both the text and image overloads. Swapping providers is confined to this one adapter.
 - **`CountTokensAsync` is a local, approximate count** (decision B-7, final) — not a call to Gemini's `countTokens` API. It trades tokenizer-exactness for zero network cost and zero API quota usage, which matters because it runs on every message send. This replaces the removed local `ITokenCounter` port — the same responsibility, now folded into the single AI port rather than a separate one.
 - `GenerateContentAsync<T>` returns `T` (typically `string`, or a JSON-shaped record when the prompt asks for structured output); the caller owns the prompt contract that makes `T` valid.
 
@@ -329,6 +346,8 @@ public interface IGenerativeAiService
 Auth: the **App** carries the Supabase JWT (`Authorization: Bearer <token>` / SignalR `accessTokenFactory`); **MCP** and **n8n** carry their service keys, which resolve to the `Mcp` / `N8n` client types (§4.2). Identifiers are UUIDs.
 
 ### 9.1 SignalR Hub (`/hub/chat`)
+
+**Group membership is entirely server-managed — there is no client → server "join group" call.** On connect, the Hub adds the connection to a SignalR Group per conversation the caller is currently a participant of. When membership changes mid-session (participant added/removed), the same broadcast that fires `MemberChanged` also updates the affected user's already-open connections' group membership, so an in-app client neither joins nor leaves groups explicitly — it simply reacts to `NewMessage`/`MemberChanged` for whatever groups the server currently has it in.
 
 **Client → server**
 
@@ -353,24 +372,24 @@ Client contract that this relies on: a client treats **`MemberChanged(Left)` whe
 
 ### 9.2 REST
 
-Auth: the App uses the Supabase JWT; MCP and n8n use service keys (§4.2). The **Clients** column lists which client types the `[AllowedClients]` attribute permits.
+Auth: the App uses the Supabase JWT (Google OAuth-issued); MCP and n8n use service keys **plus** `X-On-Behalf-Of: <username>` (§4.2) — every call, from any channel, resolves to a real user. **Min role** is the `[AllowedRoles]` gate; **Channel(s)** is informational (who realistically calls it), not itself a hard gate.
 
-| Method | Path | Role | Clients | Description |
-|---|---|---|---|---|
-| `GET` | `/api/conversations?q=<term>` | member | App, Mcp | List the caller's conversations; **`q` empty → all**, otherwise filtered (search merged in). Excludes deleted. |
-| `POST` | `/api/conversations` | any | App | Create a conversation with ≥1 other participant (caller becomes owner; `public_id` + `display_name` auto-generated) |
-| `POST` | `/api/conversations/join` | any | App, Mcp | Join by **`public_id`** in the body (rejected if frozen/deleted) |
-| `PATCH` | `/api/conversations/{id}/name` | **owner** | App | Rename `display_name` (≤ 100 chars; letters, digits, comma, space) |
-| `PATCH` | `/api/conversations/{id}/readonly` | **owner** | App | Set `is_readonly` |
-| `POST` | `/api/conversations/{id}/transfer` | **owner** | App | Transfer ownership to another participant |
-| `GET` | `/api/conversations/{id}/messages?before=&limit=` | member | App | Paginated history. `before` = message id (omitted ⇒ newest); `limit` default 50, max 100. **Filter and order on the `(sent_at, id)` tuple** — comparing `sent_at` alone loses the tie-stability that a message-id cursor exists to provide |
-| `POST` | `/api/conversations/{id}/participants` | **owner** | App | **Add a batch** of participants (all-or-nothing) |
-| `DELETE` | `/api/conversations/{id}/participants` | **owner** | App | **Remove a batch** of participants (all-or-nothing); cannot remove the owner |
-| `POST` | `/api/conversations/{id}/leave` | member | App | Leave; owner passes `mode = delete \| freeze` |
-| `POST` | `/api/conversations/{id}/summary` | member | App, Mcp, N8n | On-demand summary (global + tail) |
-| `GET` | `/api/internal/conversations` | — | **N8n** | Bulk: all non-deleted conversations |
-| `POST` | `/api/internal/summaries?hoursAgo=24` | — | **N8n** | Backend-produced roll-up across conversations active in the window |
-| `POST` | `/api/internal/digest` | — | **N8n** | Publish the digest (broadcast to listeners) |
+| Method | Path | Conversation requirement | Min role | Channel(s) | Description |
+|---|---|---|---|---|---|
+| `GET` | `/api/conversations?q=<term>` | member | User | App, Mcp | List the caller's conversations; **`q` empty → all**, otherwise filtered (search merged in). Excludes deleted. |
+| `POST` | `/api/conversations` | any | User | App | Create a conversation with ≥1 other participant, **identified by `username`** (caller becomes owner; `public_id` + `display_name` auto-generated) |
+| `POST` | `/api/conversations/join` | any | User | App, Mcp | Join by **`public_id`** in the body (rejected if frozen/deleted) |
+| `PATCH` | `/api/conversations/{id}/name` | **owner** | User | App | Rename `display_name` (≤ 100 chars; letters, digits, comma, space) |
+| `PATCH` | `/api/conversations/{id}/readonly` | **owner** | User | App | Set `is_readonly` |
+| `POST` | `/api/conversations/{id}/transfer` | **owner** | User | App | Transfer ownership to another participant, **identified by `username`** |
+| `GET` | `/api/conversations/{id}/messages?before=&limit=` | member | User | App | Paginated history. `before` = message id (omitted ⇒ newest); `limit` default 50, max 100. **Filter and order on the `(sent_at, id)` tuple** — comparing `sent_at` alone loses the tie-stability that a message-id cursor exists to provide |
+| `POST` | `/api/conversations/{id}/participants` | **owner** | User | App | **Add a batch** of participants, **identified by `username`** (all-or-nothing) |
+| `DELETE` | `/api/conversations/{id}/participants` | **owner** | User | App | **Remove a batch** of participants, **identified by `username`** (all-or-nothing); cannot remove the owner |
+| `POST` | `/api/conversations/{id}/leave` | member | User | App | Leave; owner passes `mode = delete \| freeze` |
+| `POST` | `/api/conversations/{id}/summary` | member | User | App, Mcp, N8n | On-demand summary (global + tail) |
+| `GET` | `/api/internal/conversations` | — | **Administrator** | N8n | Bulk: all non-deleted conversations |
+| `POST` | `/api/internal/summaries?hoursAgo=24` | — | **Administrator** | N8n | Backend-produced roll-up across conversations active in the window |
+| `POST` | `/api/internal/digest` | — | **Administrator** | N8n | Publish the digest (broadcast to listeners) |
 
 ```jsonc
 // GET /api/conversations           → all conversations
@@ -379,23 +398,28 @@ Auth: the App uses the Supabase JWT; MCP and n8n use service keys (§4.2). The *
 // POST /api/conversations/join
 { "publicId": "Ab3Xy9" }
 
-// POST /api/conversations/{id}/participants
-{ "userIds": ["…", "…"] }        // batch, all-or-nothing
+// POST /api/conversations           (create)
+{ "participantUsernames": ["bob", "carol"] }   // by username, not id
 
-// POST /api/messages/{id}/ocr → 202; result arrives via SignalR (Agent reply)
-{ "status": "PROCESSING" }
+// POST /api/conversations/{id}/participants     (add — same shape for DELETE)
+{ "usernames": ["dave"] }                        // batch, all-or-nothing, by username
+
+// POST /api/conversations/{id}/transfer
+{ "newOwnerUsername": "bob" }
 ```
+
+A username that doesn't exist in any of the three bodies above is `404` (not silently ignored) — the handler resolves each username to an id via `profiles_public` (§ database-design.md) before proceeding, and the whole batch fails together if any name doesn't resolve (all-or-nothing, matching the existing batch semantics).
 
 Two field limits are product decisions, recorded here as the contract: `display_name` ≤ **100** characters, and `limit` ∈ **[1, 100]** with default **50**.
 
-The user-facing endpoints reject `Mcp`/`N8n`, and the `/api/internal/*` endpoints reject `App`/`Mcp` — enforcing that a User cannot reach n8n-only endpoints and n8n cannot reach user endpoints. **Client-type authorization is owned entirely by the Api layer** (`[AllowedClients]`); the Application layer is deliberately unaware of which client called it, so handlers must never infer a client type (for example, from a failed identity lookup).
+**Authorization is entirely role-based now** (§4.2) — a `User` cannot reach the Administrator-gated `/api/internal/*` group regardless of channel, and n8n calling those endpoints must present an on-behalf-of username that resolves to an Administrator. Client-channel (App/Mcp/N8n) only decides *how identity is authenticated*, never *what's allowed* — that's `[AllowedRoles]`'s job, and the Application layer stays unaware of both the channel and the role, seeing only `IConversationAccess.UserId`/`Role`.
 
 ### 9.3 External clients (MCP, n8n)
 
-MCP and n8n are **not part of the backend** — they are external clients that call the REST API above with the `Mcp` / `N8n` client credentials (§4.2). The backend has no MCP- or n8n-specific logic. Their designs live in their own documents:
+MCP and n8n are **not part of the backend** — they are external clients that authenticate with the `Mcp` / `N8n` service keys (§4.2) **on behalf of a real user**, and are then subject to the exact same role-based authorization as the app. The backend has no MCP- or n8n-specific logic. Their designs live in their own documents:
 
 - **ChatGPT via MCP** → `mcp-integration.md` (tools map to `Conversations.Get`, `SummarizeConversation`, join).
-- **Scheduled summaries via n8n** → `n8n-workflow.md` (daily job hitting `/api/internal/*` and the summary endpoint).
+- **Scheduled summaries via n8n** → `n8n-workflow.md` (daily job hitting `/api/internal/*` and the summary endpoint) — note n8n's on-behalf-of user now needs the `Administrator` role for the internal group above.
 
 ## 10. Codebase architecture
 
@@ -408,7 +432,7 @@ flowchart TD
     Domain["ChatApp.Domain<br/>entities · enums · invariants"]
     App["ChatApp.Application<br/>MediatR slices · ports · behaviors"]
     Infra["ChatApp.Infrastructure<br/>EF Core · Supabase · SK/Gemini · memory"]
-    Api["ChatApp.Api<br/>host · controllers · SignalR · [AllowedClients]"]
+    Api["ChatApp.Api<br/>host · controllers · SignalR · [AllowedRoles]"]
 
     App --> Domain
     Infra --> App
@@ -424,7 +448,7 @@ Arrows are compile-time references. **`Application` never references `Infrastruc
 | **Domain** | Entities, enums, invariant guards; zero dependencies | a field/entity or business invariant changes |
 | **Application** | Vertical-slice use cases (MediatR) + **ports** (`IAppDbContext`, `IConversationNotifier`, `IStorageClient`, `IGenerativeAiService`, `IConversationAccess`) | you add a use case or change business flow |
 | **Infrastructure** | **Adapters**: EF Core/Npgsql, Supabase Storage, SK+Gemini, tokenizer, memory worker plumbing | you swap DB / storage / AI provider |
-| **Api** | Host: controllers, SignalR Hub, `[AllowedClients]`, DI, background service | you change routes, realtime, or client auth |
+| **Api** | Host: controllers, SignalR Hub, `[AllowedRoles]`, DI, background service | you change routes, realtime, or authorization |
 
 ### Folder tree
 
@@ -472,7 +496,8 @@ backend/
 │       ├── Program.cs                    # composition root: DI, JWT, SignalR, mediator
 │       ├── Controllers/                  # thin: HTTP -> ISender.Send
 │       ├── Realtime/                     # ChatHub, SignalRNotifier : IConversationNotifier
-│       ├── Auth/                         # AllowedClientsAttribute, ClientAuthHandler
+│       ├── Auth/                         # AllowedRolesAttribute, GoogleJwtHandler,
+│       │                                 #   ServiceKeyOnBehalfOfHandler, UserRole
 │       └── Hosted/                       # MemoryWorker : BackgroundService
 │
 └── tests/
@@ -501,7 +526,7 @@ Controllers and the Hub depend only on `ISender`:
 
 ```csharp
 [HttpPost("join")]
-[AllowedClients(Client.App, Client.Mcp)]
+[AllowedRoles(UserRole.User, UserRole.Moderator, UserRole.Administrator)]
 public async Task<IActionResult> Join(JoinConversationCommand cmd)
     => Ok(await _sender.Send(cmd));
 ```
@@ -512,9 +537,9 @@ public async Task<IActionResult> Join(JoinConversationCommand cmd)
 
 ## 11. Security
 
-- **Authentication** — the App is authenticated via Supabase Auth (JWT Bearer, validated against Supabase's issuer/signing key; passed to SignalR via `accessTokenFactory`). MCP and n8n authenticate with service keys that resolve to a `client` claim.
+- **Authentication** — the App is authenticated via Supabase Auth, **Google OAuth only** (JWT Bearer, validated against Supabase's JWKS endpoint — no static shared secret; see `prerequisite-setups.md`), passed to SignalR via `accessTokenFactory`. MCP and n8n authenticate with service keys **plus** `X-On-Behalf-Of: <username>`, resolving to that same real user's identity and `role` claim — there is no client-only/no-user identity anymore.
 - **Authorization — two layers guarding *different* surfaces, not the same one twice.**
-  1. **Backend traffic** (App via REST/SignalR, plus MCP and n8n) — enforced by `[AllowedClients(...)]` at the edge (§4.2) and by membership/owner rules inside the handlers. This is the **only** authorization for any request that goes through the .NET API.
+  1. **Backend traffic** (App via REST/SignalR, plus MCP and n8n, all now on-behalf of a real user) — enforced by `[AllowedRoles(...)]` at the edge (§4.2) and by membership/owner rules inside the handlers. This is the **only** authorization for any request that goes through the .NET API.
   2. **Direct Supabase traffic** — a Supabase project also exposes PostgREST publicly, and the **anon key ships in the frontend**. **Row-Level Security is what makes that surface safe**: without it, anyone holding the anon key could read every table directly. (RLS design, including how membership checks avoid recursion, is in `database-design.md`.)
 
   > **Consequence to design for, not around.** The backend connects to Postgres with a **service role, which bypasses RLS** — so RLS is *not* a second check on backend queries, and handler-level checks are load-bearing on their own. Conversely, if Infrastructure ever configures the connection with a role that RLS *does* apply to, `auth.uid()` is `NULL` in that session, every policy evaluates false, and **every query silently returns zero rows** rather than failing loudly. Verify the connection role first when debugging "the query returns nothing".
@@ -543,7 +568,7 @@ public async Task<IActionResult> Join(JoinConversationCommand cmd)
 
 | Limitation | Rationale / mitigation |
 |---|---|
-| Single backend instance assumed | Detached memory tasks don't survive restart or scale-out. Path: a durable queue + hosted worker if the fire-and-forget guarantee needs strengthening. |
+| Single backend instance assumed | Detached memory tasks, and the in-memory user→connection tracker that keeps SignalR group membership in sync on add/remove (§9.1), don't survive restart or scale-out. Path: a durable queue + hosted worker for the former, a backplane (e.g. Redis) for the latter if scale-out is needed. |
 | Frozen conversation is unmanaged | Freeze sets `owner_id = null`; no one can add/remove members or rename until... it stays frozen (by design — the owner chose freeze over transfer). New joins are blocked; existing members chat or leave. |
 | Manual readonly can be cleared by a join | `is_readonly` is a single flag auto-managed at the 1↔2 boundary; an owner's manual readonly is cleared if participants cross back through that boundary. Accepted simplification. |
 | Summaries can lose nuance | Prompt preserves core facts; the global fold adds redundancy. |
