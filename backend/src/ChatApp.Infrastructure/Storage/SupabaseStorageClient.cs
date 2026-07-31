@@ -7,7 +7,7 @@ namespace ChatApp.Infrastructure.Storage;
 /// <summary>
 /// Implements <see cref="IStorageClient"/> over Supabase Storage's REST API, authenticating with the
 /// service-role key rather than trusting the client-supplied (frontend-issued, possibly expired)
-/// signed URL. Only ever downloads — uploads happen client-side directly to Storage (principle 2).
+/// signed URL. Only ever downloads — uploads happen client-side directly to Storage.
 /// </summary>
 public sealed class SupabaseStorageClient : IStorageClient
 {

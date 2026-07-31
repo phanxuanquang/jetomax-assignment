@@ -21,10 +21,9 @@ public sealed class ConversationConfiguration : IEntityTypeConfiguration<Convers
         builder.Property(c => c.IsReadonly).HasColumnName("is_readonly").IsRequired();
         builder.Property(c => c.CreatedTime).HasColumnName("created_time").IsRequired();
 
-        // schema.sql declares last_message_time NOT NULL DEFAULT now(); Domain keeps it nullable as
-        // a "no messages yet" convention ([[project_domain_schema_deviations]] item 2). Marking it
-        // server-generated-on-add means EF omits the column from INSERT when the CLR value is null,
-        // letting Postgres apply its own default rather than violating the NOT NULL constraint.
+        // Column is NOT NULL DEFAULT now(); Domain keeps it nullable as a "no messages yet" convention.
+        // Marking it server-generated-on-add makes EF omit the column from INSERT when the CLR value
+        // is null, letting Postgres apply its own default rather than violating the NOT NULL constraint.
         builder.Property(c => c.LastMessageTime)
             .HasColumnName("last_message_time")
             .HasDefaultValueSql("now()")

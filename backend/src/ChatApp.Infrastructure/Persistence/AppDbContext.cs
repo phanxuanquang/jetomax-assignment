@@ -7,17 +7,10 @@ using Microsoft.EntityFrameworkCore;
 namespace ChatApp.Infrastructure.Persistence;
 
 /// <summary>
-/// EF Core / Npgsql implementation of <see cref="IAppDbContext"/> over the Supabase Postgres
-/// database created by <c>schema.sql</c>. This context never creates or alters the schema — it only
-/// maps to tables that already exist.
-/// <para>
-/// <b>Connection role.</b> The connection string configured for this context (§11) must use a
-/// Postgres role that <b>bypasses Row-Level Security</b> (Supabase's service role), never a role RLS
-/// applies to — RLS is not a second check on backend queries here, and a role subject to it makes
-/// <c>auth.uid()</c> NULL for this session, so every policy evaluates false and every query silently
-/// returns zero rows rather than failing loudly. If data unexpectedly "disappears," check the
-/// connection role first.
-/// </para>
+/// EF Core / Npgsql implementation of <see cref="IAppDbContext"/> over the Supabase Postgres database;
+/// never creates or alters the schema, only maps to tables that already exist. Must connect using a role
+/// that bypasses Row-Level Security (Supabase's service role) — a role subject to RLS makes <c>auth.uid()</c>
+/// NULL here, so every policy evaluates false and queries silently return zero rows instead of failing loudly.
 /// </summary>
 internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IAppDbContext
 {
@@ -89,8 +82,8 @@ internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbC
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        // UTC discipline (§10): guarantee every DateTime read from/written to a timestamptz column
-        // is Kind=Utc, regardless of Npgsql's own timestamp-kind defaults.
+        // Guarantee every DateTime read from/written to a timestamptz column is Kind=Utc, regardless
+        // of Npgsql's own timestamp-kind defaults.
         configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
         configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
     }

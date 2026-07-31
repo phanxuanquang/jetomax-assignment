@@ -7,22 +7,15 @@ using System.Text.Json;
 namespace ChatApp.Infrastructure.Ai;
 
 /// <summary>
-/// Implements the single AI port (<see cref="IGenerativeAiService"/>, §8) over Semantic Kernel's
-/// <see cref="IChatCompletionService"/>. A thin adapter only: prompts are composed entirely by
-/// Application callers, this class only executes them and shapes the response as <c>T</c>. The only
-/// provider-specific surface is <see cref="PromptSettingsFactory.Create{T}"/> — swapping
-/// the underlying model provider (currently Google Gemini, wired in <c>DependencyInjection.cs</c>)
-/// should only ever require changing that one method plus the DI registration/connector package.
+/// Implements <see cref="IGenerativeAiService"/> over Semantic Kernel's <see cref="IChatCompletionService"/>;
+/// a thin adapter that only executes prompts composed by Application callers and shapes the response as <c>T</c>.
 /// </summary>
 internal sealed class GenerativeAiService(IChatCompletionService chatCompletionService, IStorageClient storageClient) : IGenerativeAiService
 {
     private readonly IChatCompletionService _chatCompletionService = chatCompletionService;
     private readonly IStorageClient _storageClient = storageClient;
 
-    /// <summary>
-    /// Local mock (decision: character count, not a remote call) — counts <paramref name="text"/>'s
-    /// total characters. Deliberately not the provider's real token-counting API.
-    /// </summary>
+    /// <summary>Counts characters as a stand-in for tokens, avoiding a remote call to the provider's real token-counting API.</summary>
     public async Task<int> CountTokensAsync(string text, CancellationToken cancellationToken = default)
         => text.Length;
 
