@@ -127,6 +127,7 @@ backend/src/
 │   │   │                    TransferOwnership, AddParticipants,
 │   │   │                    RemoveParticipants, Get
 │   │   ├── Messages/        Send, SendImage, Get
+│   │   ├── Users/           GetUserByIdOrUsername
 │   │   └── Internal/        SummarizeConversation, GetAllConversations,
 │   │                         SummarizeConversations, PublishDigest, SetUserRole
 │   ├── Memory/        ConversationMemoryService — chunk + fold logic
@@ -328,6 +329,7 @@ Auth: the app carries a Supabase JWT; MCP and n8n carry a service key plus `X-On
 
 | Method | Path | Min role | Description |
 |---|---|---|---|
+| `GET` | `/api/users/{idOrUsername}` | User | Resolve a user by id or username, whichever the caller has, to `{ id, username }` |
 | `GET` | `/api/conversations?q=<term>` | User | List the caller's conversations; empty `q` returns all, otherwise filters by name |
 | `POST` | `/api/conversations` | User | Create a conversation with ≥1 other participant, by `username` |
 | `POST` | `/api/conversations/join` | User | Join by `publicId` |
