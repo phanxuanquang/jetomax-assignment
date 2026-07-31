@@ -19,7 +19,7 @@ flowchart LR
 - **One fixed backend account.** This server always calls the backend as one configured user (`Backend:OnBehalfOfUsername`) using the backend's existing `Mcp` service key. There is no per-caller identity mapping — every ChatGPT/Claude session that can reach this server acts as that same account.
 - **OAuth gate, not a static key.** Both ChatGPT (Developer Mode connectors) and Claude (custom connectors) require the client to complete an OAuth flow against a real authorization server before calling a remote MCP server. Rather than building a token-issuing server ourselves, [Auth0](https://auth0.com/)'s free tier plays that role — this server only *validates* the access tokens Auth0 issues (`AddJwtBearer`), the same shape of work the [backend](../backend/README.md) already does for Supabase JWTs. It also publishes the [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) Protected Resource Metadata document (`.well-known/oauth-protected-resource`) so a client can discover Auth0 automatically — this is built into the SDK's `AddMcp(...)` call, not hand-written.
 - **The token only proves "a client completed Auth0 login" — it doesn't change which backend account is used.** Whoever holds a valid Auth0 access token for this server's audience gets the same fixed `Backend:OnBehalfOfUsername` account; there's no per-user permission mapping, since one shared account is this project's whole scope (see [mcp-integration.md](../docs/mcp-integration.md) for why).
-- **Stateless.** No tool needs multi-turn session state or server-to-client sampling, so the server runs in stateless HTTP mode — simpler than the alternative, one less thing to scale or persist.
+- **SDK pinned to `1.4.1`, not the latest `2.0.0`.** See the comment in `ChatApp.Mcp.csproj` — as of writing, ChatGPT's connector sends a request that `2.0.0`'s stricter per-request `_meta` validation rejects outright, before any tool call is attempted. Confirmed by testing against a real ChatGPT connector, in both stateless and stateful mode. Revisit once that's fixed upstream.
 
 ## Codebase
 
@@ -61,6 +61,8 @@ Do this once before running the server (free tier is enough — [sign up here](h
    - **Identifier**: a fixed string you choose (this is the OAuth *audience*). It does **not** need to be a real, reachable URL, and it does **not** need to change when your ngrok URL changes during local testing — e.g. `https://chatapp-mcp` is fine. Whatever you pick, it must match `Auth0:Audience` below exactly.
    - Leave signing algorithm as the default (RS256) — the server validates signatures against Auth0's JWKS, the same pattern the [backend](../backend/README.md) already uses for Supabase.
 3. **Create at least one login method** for the consent screen users complete (Auth0's default `Username-Password-Authentication` connection works — create one user for yourself; nobody else needs an account here since every token maps to the same fixed backend account regardless of who logs in).
+   - **Promote that connection to the domain level.** Dashboard → **Authentication → Database → Username-Password-Authentication → Applications** tab — there's a banner saying third-party apps (like ChatGPT's dynamically-registered client) need the connection promoted to domain level. Follow that link and confirm. Skipping this gets you a generic "Oops!, something went wrong" on the Universal Login page with no useful error shown to the user — check **Monitoring → Logs** in the dashboard for the real reason if this happens (that's how this exact issue was diagnosed).
+4. **Grant the API default permissions for third-party apps.** Dashboard → **Applications → APIs → your API → Settings** → scroll to **Default Permissions for Third Party Apps** → set **User-Delegated Access** to **Authorized** → Save. Without this, Auth0 rejects the dynamically-registered client with "Client ... is not authorized to access resource server ..." — visible in the same Logs page as a `Failed Login` entry.
 
 Official reference, since Auth0's dashboard UI changes over time: [Auth0 API docs](https://auth0.com/docs/get-started/apis) · [Dynamic Client Registration](https://auth0.com/docs/get-started/applications/dynamic-client-registration).
 
@@ -74,7 +76,7 @@ cd mcp
 dotnet user-secrets init
 dotnet user-secrets set "Backend:BaseUrl"             "http://localhost:5000"
 dotnet user-secrets set "Backend:ClientKey"           "<the backend server's Clients:McpKey value>"
-dotnet user-secrets set "Backend:OnBehalfOfUsername"  "<an registered username>"
+dotnet user-secrets set "Backend:OnBehalfOfUsername"  "<a User-role backend username - NOT Moderator/Administrator>"
 dotnet user-secrets set "Auth0:Domain"                "<your-tenant>.us.auth0.com"
 dotnet user-secrets set "Auth0:Audience"               "<the API Identifier you chose above>"
 
@@ -85,6 +87,8 @@ dotnet run
 ```
 
 The MCP endpoint is `POST/GET /mcp` on whatever port the console prints. Every request needs a valid Auth0 access token for the configured audience, or it gets `401` with a `WWW-Authenticate` header pointing the client at `/.well-known/oauth-protected-resource` — that's how ChatGPT/Claude discover Auth0 automatically and complete the OAuth flow before retrying.
+
+> **Why `Backend:OnBehalfOfUsername` must be a `User`-role account:** the backend's `ClientKeyAuthenticationHandler` deliberately caps the `Mcp` service key to only impersonate a `User`-role account, so a leaked Mcp key can't be used to act as a Moderator/Administrator. Pointing this at a Moderator/Administrator username fails every tool call with a backend `401` ("Mcp callers may only act on behalf of a User-role account") — check the backend's own console log for that exact message if tool calls fail with no other explanation.
 
 ## Deployment
 
@@ -128,7 +132,7 @@ Before deploying anywhere, verify the whole flow (ChatGPT → your MCP server �
 ## Maintaining & upgrading
 
 - **Add a tool**: add a method with `[McpServerTool]` to a class marked `[McpServerToolType]` under `Tools/` (new file or existing one). `WithToolsFromAssembly()` in `Program.cs` discovers it automatically — no registration step to remember.
-- **Upgrade the SDK**: bump the `ModelContextProtocol.AspNetCore` version in `ChatApp.Mcp.csproj` and rebuild. Check the [SDK's release notes](https://github.com/modelcontextprotocol/csharp-sdk/releases) for breaking changes first.
+- **Upgrade the SDK**: bump the `ModelContextProtocol.AspNetCore` version in `ChatApp.Mcp.csproj` and rebuild. Check the [SDK's release notes](https://github.com/modelcontextprotocol/csharp-sdk/releases) for breaking changes first — and re-read the comment above the package reference before jumping to `2.0.0`+, since that's what's currently pinned back and why.
 - **Revoke access**: in Auth0, revoke the client's grant (Dashboard → **Applications** → the dynamically-registered client → Delete/Revoke) to cut off one connector, or rotate the backend's `Clients:McpKey` to cut off every connector at once regardless of their Auth0 tokens.
 - **Backend contract drift**: `DTOs/` is a hand-maintained mirror of the backend's JSON shapes, not a shared library — if the backend's `ConversationDto`/`MessageDto` change, update these records to match. See [backend-system-design-and-architecture](../docs/backend-system-design-and-architecture.md#10-api-reference) for the source of truth.
 

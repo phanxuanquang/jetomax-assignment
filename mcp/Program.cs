@@ -19,7 +19,7 @@ builder.Logging.AddConsole(consoleLogOptions =>
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
@@ -77,9 +77,9 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// Stateless: no tool here needs server-to-client sampling or session state, so each request is independent.
+// Stateful: fine for this server's request volume, and this is the version's own default anyway.
 builder.Services.AddMcpServer()
-    .WithHttpTransport(o => o.Stateless = true)
+    .WithHttpTransport(o => o.Stateless = false)
     .WithToolsFromAssembly();
 
 var app = builder.Build();
