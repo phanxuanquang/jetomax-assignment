@@ -1,17 +1,23 @@
 using ChatApp.Mcp.Backend;
-using ChatApp.Mcp.Middlewares;
 using ChatApp.Mcp.Options;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using ModelContextProtocol.AspNetCore.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddConsole(consoleLogOptions =>
+{
+    consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
+});
 
 builder.Services.AddOptions<BackendOptions>()
     .Bind(builder.Configuration.GetSection("Backend"))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-builder.Services.AddOptions<McpAccessOptions>()
-    .Bind(builder.Configuration.GetSection("Mcp"))
+builder.Services.AddOptions<Auth0Options>()
+    .Bind(builder.Configuration.GetSection("Auth0"))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
@@ -23,6 +29,42 @@ builder.Services.AddHttpClient<BackendClient>((services, client) =>
     client.DefaultRequestHeaders.Add("X-On-Behalf-Of", options.OnBehalfOfUsername);
 });
 
+var auth0 = builder.Configuration.GetSection("Auth0").Get<Auth0Options>()
+    ?? throw new InvalidOperationException("Missing Auth0 configuration.");
+var authority = $"https://{auth0.Domain}/";
+
+// This server only checks "is the token a valid Auth0 access token for our audience" - not who the
+// human behind it is, since every tool call acts on the one fixed Backend:OnBehalfOfUsername account
+// regardless. Real per-user identity is Auth0's job (Universal Login), not this server's.
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultChallengeScheme = McpAuthenticationDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.Authority = authority;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = authority,
+        ValidateAudience = true,
+        ValidAudience = auth0.Audience,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+    };
+})
+.AddMcp(options =>
+{
+    options.ResourceMetadata = new()
+    {
+        Resource = auth0.Audience,
+        AuthorizationServers = { authority },
+    };
+});
+
+builder.Services.AddAuthorization();
+
 // Stateless: no tool here needs server-to-client sampling or session state, so each request is independent.
 builder.Services.AddMcpServer()
     .WithHttpTransport(o => o.Stateless = true)
@@ -30,7 +72,8 @@ builder.Services.AddMcpServer()
 
 var app = builder.Build();
 
-app.UseMiddleware<ApiKeyMiddleware>();
-app.MapMcp("/mcp");
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapMcp("/mcp").RequireAuthorization();
 
 app.Run();

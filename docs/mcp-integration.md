@@ -18,26 +18,27 @@ Reference: [Building MCP servers for ChatGPT](https://platform.openai.com/docs/m
 
 | Tool | Input | Backend call |
 |---|---|---|
-| `search` | `query` | `GET /api/conversations?q=<query>` |
-| `fetch` | `id` | `GET /api/conversations/{id}/messages` |
-| `list_conversations` | — | `GET /api/conversations` (empty query) |
-| `summarize_thread` | `conversationId` | `POST /api/conversations/{id}/summary` |
-| `join_group` | `publicId` | `POST /api/conversations/join` |
+| `list_joined_conversations` | `query` | `GET /api/conversations?q=<query>` |
+| `fetch_conversation_messages` | `conversationId`, `beforeMessageId?`, `limit?` | `GET /api/conversations/{id}/messages` |
+| `get_conversation_summarization` | `conversationId` | `POST /api/conversations/{id}/summary` |
+| `join_conversation` | `publicId` | `POST /api/conversations/join` |
 
-`search` and `list_conversations` hit the same backend operation — an empty query returns everything, a non-empty one filters.
+There is no standard `search`/`fetch` pair — see [mcp/README.md](../mcp/README.md#tools) for what that trades off against ChatGPT's default (non-Developer-Mode) connector calling convention.
 
 ## Auth model
 
-The MCP server always calls the backend as **one fixed, configured account** — there is no per-ChatGPT-user mapping. Every tool call sends:
+Two separate authentication concerns, not one:
 
-```
-X-Client-Key: <Clients:McpKey value>
-X-On-Behalf-Of: <the one configured backend username>
-```
+1. **MCP server → backend**: always as **one fixed, configured account** — there is no per-caller mapping. Every tool call sends:
+   ```
+   X-Client-Key: <Clients:McpKey value>
+   X-On-Behalf-Of: <the one configured backend username>
+   ```
+   The backend resolves that user and applies the exact same membership, ownership, and role-based rules ([architecture §6](backend-system-design-and-architecture.md#6-authentication--authorization)) it would for that user calling directly.
 
-`X-Client-Key` authenticates the MCP server as a trusted service; `X-On-Behalf-Of` carries the username every call acts as — the backend resolves that user and applies the exact same membership, ownership, and role-based rules ([architecture §6](backend-system-design-and-architecture.md#6-authentication--authorization)) it would for that user calling directly.
+2. **ChatGPT/Claude → MCP server**: real OAuth, since both platforms require it for remote MCP connectors. The MCP server doesn't issue tokens itself — it validates access tokens issued by [Auth0](https://auth0.com/) (a hosted authorization server) against a configured audience, publishing the standard [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery document so ChatGPT/Claude can find Auth0 automatically. A valid token only proves "this client completed Auth0 login" — it does not change which backend account gets used, since that's still the one fixed account from step 1.
 
-Separately, the MCP server gates *itself*: every incoming request must carry a matching `Authorization: Bearer <key>`, which is how ChatGPT/Claude authenticate to it. This keeps the design to exactly one shared credential per direction instead of a per-user OAuth exchange — the right amount of complexity for a single-account integration; see [mcp/README.md](../mcp/README.md) for the full setup and rationale.
+See [mcp/README.md](../mcp/README.md) for the full Auth0 setup and connector instructions.
 
 ## Implementation
 

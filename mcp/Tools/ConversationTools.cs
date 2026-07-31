@@ -10,7 +10,7 @@ namespace ChatApp.Mcp.Tools;
 public sealed class ConversationTools(BackendClient backend)
 {
     [McpServerTool(Name = "list_joined_conversations", ReadOnly = true, UseStructuredContent = true)]
-    [Description("List all conversations that your account currently participates in. Empty query returns all conversations.")]
+    [Description("List conversations that your account currently participates in. Empty query returns all conversations.")]
     public async Task<IReadOnlyList<ConversationMetaDto>> ListConversations(
         [Description("Text to match against conversation display names.")] string query,
         CancellationToken cancellationToken = default)
@@ -21,14 +21,14 @@ public sealed class ConversationTools(BackendClient backend)
             .ToList();
     }
 
-    [McpServerTool(Name = "get_thread_summarization", ReadOnly = true)]
+    [McpServerTool(Name = "get_conversation_summarization", ReadOnly = true)]
     [Description("Retrieve the summarization for a specific conversation's activity to date, by conversation ID.")]
     public Task<string> SummarizeThread(
         Guid conversationId,
         CancellationToken cancellationToken = default)
         => backend.SummarizeAsync(conversationId, cancellationToken);
 
-    [McpServerTool(Name = "join_group")]
+    [McpServerTool(Name = "join_conversation")]
     [Description("Join a specific conversation using its public ID.")]
     public async Task JoinGroup(
         [Description("The conversation's 6-character public join code.")] string publicId,
