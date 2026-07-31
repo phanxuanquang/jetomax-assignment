@@ -28,18 +28,17 @@ Reference: [Building MCP servers for ChatGPT](https://platform.openai.com/docs/m
 
 ## Auth model
 
-The MCP server authenticates each ChatGPT user itself, then calls the backend with the `Mcp` service key plus that user's backend **username** — the backend resolves a real user and applies the exact same membership, ownership, and role-based rules ([architecture §6](backend-system-design-and-architecture.md#6-authentication--authorization)) it would for that user calling directly.
+The MCP server always calls the backend as **one fixed, configured account** — there is no per-ChatGPT-user mapping. Every tool call sends:
 
 ```
 X-Client-Key: <Clients:McpKey value>
-X-On-Behalf-Of: <username>
+X-On-Behalf-Of: <the one configured backend username>
 ```
 
-`X-Client-Key` authenticates the MCP server as a trusted service; `X-On-Behalf-Of` carries the username the request acts as. A username that doesn't resolve, or is missing, is rejected with `401`.
+`X-Client-Key` authenticates the MCP server as a trusted service; `X-On-Behalf-Of` carries the username every call acts as — the backend resolves that user and applies the exact same membership, ownership, and role-based rules ([architecture §6](backend-system-design-and-architecture.md#6-authentication--authorization)) it would for that user calling directly.
 
-The MCP server owns its own mapping of "which ChatGPT/OAuth user maps to which backend username" — that mapping is entirely the MCP server's concern, not the backend's.
+Separately, the MCP server gates *itself*: every incoming request must carry a matching `Authorization: Bearer <key>`, which is how ChatGPT/Claude authenticate to it. This keeps the design to exactly one shared credential per direction instead of a per-user OAuth exchange — the right amount of complexity for a single-account integration; see [mcp/README.md](../mcp/README.md) for the full setup and rationale.
 
-## Open items
+## Implementation
 
-- MCP server project skeleton and hosting.
-- Exact `fetch` item shape for ChatGPT deep-research compatibility.
+The server lives at [`mcp/`](../mcp/) — see [mcp/README.md](../mcp/README.md) for the codebase layout, how to run/deploy it, and step-by-step setup for both ChatGPT and Claude.
