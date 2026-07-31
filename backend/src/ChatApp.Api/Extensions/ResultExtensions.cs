@@ -12,7 +12,7 @@ internal static class ResultExtensions
     public static IActionResult ToActionResult<T>(this Result<T> result) =>
         result.IsSuccess ? new OkObjectResult(result.Value) : ToErrorResult(result.Error!);
 
-    private static IActionResult ToErrorResult(Error error)
+    private static ObjectResult ToErrorResult(Error error)
     {
         var body = new { code = error.Code, message = error.Message };
 

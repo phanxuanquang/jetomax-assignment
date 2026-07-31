@@ -8,9 +8,7 @@ namespace ChatApp.Api.Realtime;
 
 /// <summary>
 /// Implements <see cref="IConversationNotifier"/> over SignalR (§5, §9.1). Groups map 1:1 to
-/// conversation ids (<see cref="GroupName"/>). <c>Application</c>'s <c>MessageMapper</c> is internal
-/// to that assembly, so <see cref="ToMessageDto"/> re-derives the same public <see cref="MessageDto"/>
-/// shape here from the raw <see cref="Message"/> domain entity this port is handed.
+/// conversation ids (<see cref="GroupName"/>).
 /// </summary>
 public sealed class SignalRConversationNotifier(IHubContext<ChatHub> hubContext, IUserConnectionTracker connectionTracker)
     : IConversationNotifier
@@ -19,7 +17,7 @@ public sealed class SignalRConversationNotifier(IHubContext<ChatHub> hubContext,
     public static string GroupName(Guid conversationId) => conversationId.ToString();
 
     public Task NotifyNewMessageAsync(Guid conversationId, Message message, CancellationToken cancellationToken = default) =>
-        hubContext.Clients.Group(GroupName(conversationId)).SendAsync("NewMessage", ToMessageDto(message), cancellationToken);
+        hubContext.Clients.Group(GroupName(conversationId)).SendAsync("NewMessage", MessageMapper.ToDto(message), cancellationToken);
 
     public async Task NotifyMemberChangedAsync(Guid conversationId, Guid userId, MemberChangeAction action, CancellationToken cancellationToken = default)
     {
@@ -52,18 +50,5 @@ public sealed class SignalRConversationNotifier(IHubContext<ChatHub> hubContext,
         MemberChangeAction.Joined => "Added",
         MemberChangeAction.Left => "Left",
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unmapped MemberChangeAction value.")
-    };
-
-    private static MessageDto ToMessageDto(Message message) => message switch
-    {
-        TextMessage text => new MessageDto(
-            text.Id, text.ConversationId, text.UserId, text.Type, text.RepliesToMessageId, text.SentAt,
-            Content: text.Content, ImageUrl: null, Caption: null),
-
-        ImageMessage image => new MessageDto(
-            image.Id, image.ConversationId, image.UserId, image.Type, image.RepliesToMessageId, image.SentAt,
-            Content: null, ImageUrl: image.ImageUrl, Caption: image.Caption),
-
-        _ => throw new InvalidOperationException($"Unknown message payload type: {message.GetType().Name}")
     };
 }

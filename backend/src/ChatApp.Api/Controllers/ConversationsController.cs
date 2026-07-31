@@ -1,6 +1,7 @@
 using ChatApp.Api.Auth;
 using ChatApp.Api.DTOs;
 using ChatApp.Api.Extensions;
+using ChatApp.Domain.Enums;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,9 @@ namespace ChatApp.Api.Controllers;
 /// <summary>
 /// Thin REST surface over the <c>Conversations</c>/<c>Messages</c> Application slices (§9.2). Every
 /// action just resolves <see cref="ISender"/> and forwards to the matching command/query — no
-/// business logic lives here.
+/// business logic lives here. Every action is reachable by any authenticated role except
+/// <see cref="Summarize"/> (Administrator/Moderator only), so only that one carries an
+/// <c>[AllowedRoles]</c> attribute — <c>[Authorize]</c> alone gates the rest.
 /// </summary>
 [ApiController]
 [Route("api/conversations")]
@@ -20,7 +23,6 @@ namespace ChatApp.Api.Controllers;
 public sealed class ConversationsController(ISender sender) : ControllerBase
 {
     [HttpGet]
-    [AllowedClients(Client.App, Client.Mcp)]
     public async Task<IActionResult> Get([FromQuery] string? q, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Get.Query(q), cancellationToken);
@@ -28,15 +30,13 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
     }
 
     [HttpPost]
-    [AllowedClients(Client.App)]
     public async Task<IActionResult> Create([FromBody] CreateConversationRequest request, CancellationToken cancellationToken = default)
     {
-        var result = await sender.Send(new ConversationsFeature.Create.Command(request.ParticipantUserIds), cancellationToken);
+        var result = await sender.Send(new ConversationsFeature.Create.Command(request.ParticipantUsernames), cancellationToken);
         return result.ToActionResult();
     }
 
     [HttpPost("join")]
-    [AllowedClients(Client.App, Client.Mcp)]
     public async Task<IActionResult> Join([FromBody] JoinConversationRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Join.Command(request.PublicId), cancellationToken);
@@ -44,7 +44,6 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
     }
 
     [HttpPatch("{id:guid}/name")]
-    [AllowedClients(Client.App)]
     public async Task<IActionResult> Rename(Guid id, [FromBody] RenameConversationRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Rename.Command(id, request.DisplayName), cancellationToken);
@@ -52,7 +51,6 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
     }
 
     [HttpPatch("{id:guid}/readonly")]
-    [AllowedClients(Client.App)]
     public async Task<IActionResult> SetReadonly(Guid id, [FromBody] SetReadonlyRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.SetReadonly.Command(id, request.IsReadonly), cancellationToken);
@@ -60,15 +58,13 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/transfer")]
-    [AllowedClients(Client.App)]
     public async Task<IActionResult> TransferOwnership(Guid id, [FromBody] TransferOwnershipRequest request, CancellationToken cancellationToken = default)
     {
-        var result = await sender.Send(new ConversationsFeature.TransferOwnership.Command(id, request.NewOwnerUserId), cancellationToken);
+        var result = await sender.Send(new ConversationsFeature.TransferOwnership.Command(id, request.NewOwnerUsername), cancellationToken);
         return result.ToActionResult();
     }
 
     [HttpGet("{id:guid}/messages")]
-    [AllowedClients(Client.App)]
     public async Task<IActionResult> GetMessages(Guid id, [FromQuery] Guid? before, [FromQuery] int limit = 50, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new MessagesFeature.Get.Query(id, before, limit), cancellationToken);
@@ -76,23 +72,20 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/participants")]
-    [AllowedClients(Client.App)]
     public async Task<IActionResult> AddParticipants(Guid id, [FromBody] ParticipantsRequest request, CancellationToken cancellationToken = default)
     {
-        var result = await sender.Send(new ConversationsFeature.AddParticipants.Command(id, request.UserIds), cancellationToken);
+        var result = await sender.Send(new ConversationsFeature.AddParticipants.Command(id, request.Usernames), cancellationToken);
         return result.ToActionResult();
     }
 
     [HttpDelete("{id:guid}/participants")]
-    [AllowedClients(Client.App)]
     public async Task<IActionResult> RemoveParticipants(Guid id, [FromBody] ParticipantsRequest request, CancellationToken cancellationToken = default)
     {
-        var result = await sender.Send(new ConversationsFeature.RemoveParticipants.Command(id, request.UserIds), cancellationToken);
+        var result = await sender.Send(new ConversationsFeature.RemoveParticipants.Command(id, request.Usernames), cancellationToken);
         return result.ToActionResult();
     }
 
     [HttpPost("{id:guid}/leave")]
-    [AllowedClients(Client.App)]
     public async Task<IActionResult> Leave(Guid id, [FromBody] LeaveConversationRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ConversationsFeature.Leave.Command(id, request.Mode), cancellationToken);
@@ -100,7 +93,7 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
     }
 
     [HttpPost("{id:guid}/summary")]
-    [AllowedClients(Client.App, Client.Mcp, Client.N8n)]
+    [AllowedRoles(UserRole.Administrator, UserRole.Moderator)]
     public async Task<IActionResult> Summarize(Guid id, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new ChatApp.Application.Features.Internal.SummarizeConversation.Query(id), cancellationToken);

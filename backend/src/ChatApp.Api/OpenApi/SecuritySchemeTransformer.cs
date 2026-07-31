@@ -4,11 +4,11 @@ using Microsoft.OpenApi;
 namespace ChatApp.Api.OpenApi;
 
 /// <summary>
-/// Declares the three ways a request can authenticate (§4.2) in the generated OpenAPI document, so
-/// the Scalar UI's "Authorize" panel lets a developer supply a Supabase JWT (App) or the
-/// <c>X-Client-Key</c>/<c>X-On-Behalf-Of</c> headers (Mcp/N8n) directly, without hand-crafting requests.
-/// Dev/test tooling only — has no effect on runtime authentication, which is entirely driven by
-/// <see cref="Auth.AuthenticationSetup"/>.
+/// Declares the two ways a request can authenticate (§4.2) in the generated OpenAPI document, so the
+/// Scalar UI's "Authorize" panel lets a developer supply a Supabase JWT (App) or the
+/// <c>X-Client-Key</c>+<c>X-On-Behalf-Of</c> headers (Mcp/N8n — both now require the pair together)
+/// directly, without hand-crafting requests. Dev/test tooling only — has no effect on runtime
+/// authentication, which is entirely driven by <see cref="Auth.AuthenticationSetup"/>.
 /// </summary>
 public sealed class SecuritySchemeTransformer : IOpenApiDocumentTransformer
 {
@@ -42,15 +42,14 @@ public sealed class SecuritySchemeTransformer : IOpenApiDocumentTransformer
             Type = SecuritySchemeType.ApiKey,
             In = ParameterLocation.Header,
             Name = "X-On-Behalf-Of",
-            Description = "MCP client only, alongside X-Client-Key: the user ID that the call acts on behalf of."
+            Description = "MCP/n8n client, alongside X-Client-Key: the username of the real user the call acts on behalf of."
         };
 
-        // Three alternatives, matching the three real caller shapes: App (Bearer alone), N8n
-        // (ClientKey alone), Mcp (ClientKey + OnBehalfOf together).
+        // Two alternatives, matching the two real caller shapes: App (Bearer alone), Mcp/N8n
+        // (ClientKey + OnBehalfOf together — both now require the pair, never ClientKey alone).
         document.Security =
         [
             new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference(BearerScheme, document)] = [] },
-            new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference(ClientKeyScheme, document)] = [] },
             new OpenApiSecurityRequirement
             {
                 [new OpenApiSecuritySchemeReference(ClientKeyScheme, document)] = [],
