@@ -1,5 +1,5 @@
 ﻿namespace ChatApp.Mcp.DTOs;
-                                                                                                                                   
+
 public sealed record MessageDto(
     Guid Id,
     Guid SenderId,

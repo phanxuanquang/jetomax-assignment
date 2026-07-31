@@ -377,3 +377,5 @@ n8n/.n8n/
 .claude/
 agent/
 skills-lock.json
+
+node_modules/

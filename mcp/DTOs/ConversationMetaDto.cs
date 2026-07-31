@@ -2,6 +2,6 @@
 
 public sealed record ConversationMetaDto(
     Guid Id,
-    string PublicId, 
-    string DisplayName, 
+    string PublicId,
+    string DisplayName,
     int TotalParticipant);

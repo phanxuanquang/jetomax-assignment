@@ -1,4 +1,4 @@
-namespace ChatApp.Api.Memory;
+namespace ChatApp.Api.Options;
 
 public sealed class ConversationMemoryOptions
 {

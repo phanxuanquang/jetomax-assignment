@@ -1,3 +1,4 @@
+using ChatApp.Api.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace ChatApp.Api.Auth;

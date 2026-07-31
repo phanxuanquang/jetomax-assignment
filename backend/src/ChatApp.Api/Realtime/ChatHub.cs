@@ -1,5 +1,5 @@
 using ChatApp.Api.Auth;
-using ChatApp.Api.Memory;
+using ChatApp.Api.Options;
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
 using ChatApp.Application.Memory;

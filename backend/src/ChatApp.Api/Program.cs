@@ -1,7 +1,7 @@
 using ChatApp.Api.Auth;
 using ChatApp.Api.ErrorHandling;
-using ChatApp.Api.Memory;
 using ChatApp.Api.OpenApi;
+using ChatApp.Api.Options;
 using ChatApp.Api.Realtime;
 using ChatApp.Application;
 using ChatApp.Application.Abstractions;

@@ -1,4 +1,4 @@
-namespace ChatApp.Api.Auth;
+namespace ChatApp.Api.Options;
 
 public sealed class ClientKeyOptions
 {

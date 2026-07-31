@@ -1,3 +1,4 @@
+using ChatApp.Api.Options;
 using ChatApp.Application.Abstractions;
 using ChatApp.Domain.Enums;
 using Microsoft.AspNetCore.Authentication;
