@@ -39,7 +39,7 @@ public abstract class Message
     public Guid? RepliesToMessageId { get; set; }
 
     /// <summary>
-    /// When the message was sent (the spec's "Timestamp").
+    /// When the message was sent.
     /// </summary>
     public DateTime SentAt { get; } = DateTime.UtcNow;
 
