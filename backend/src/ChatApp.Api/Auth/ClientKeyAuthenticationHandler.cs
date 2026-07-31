@@ -8,15 +8,9 @@ using System.Text.Encodings.Web;
 namespace ChatApp.Api.Auth;
 
 /// <summary>
-/// Authenticates Mcp/N8n callers via the <c>X-Client-Key</c> header (§4.2), resolved against
-/// <c>Clients:McpKey</c>/<c>Clients:N8nKey</c> (see <c>mcp-integration.md</c>'s concrete header
-/// shape). Both a matching Mcp key and a matching N8n key now additionally require the
-/// <c>X-On-Behalf-Of</c> header, carrying the real user's <em>username</em> (not a raw id) the call
-/// acts on behalf of — resolved here the same way the rest of the API resolves a username (§9.2).
-/// There is no more "no identity" case for either client: a missing/unresolvable on-behalf-of is 401.
-/// Mcp additionally may only impersonate a <see cref="UserRole.User"/>-role account (401), capping
-/// blast radius if the Mcp key leaks — an N8n on-behalf-of has no such restriction, since the daily
-/// digest workflow specifically needs an Administrator (§9.2's <c>/api/internal/*</c> group).
+/// Authenticates Mcp/N8n callers via X-Client-Key + X-On-Behalf-Of (a username). Mcp may only
+/// impersonate a User-role account, capping blast radius if the key leaks; N8n has no role cap since
+/// its digest job needs an Administrator.
 /// </summary>
 public sealed class ClientKeyAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> schemeOptions,

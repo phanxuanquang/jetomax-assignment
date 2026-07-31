@@ -13,11 +13,9 @@ using SummarizeConversationsFeature = ChatApp.Application.Features.Internal.Summ
 namespace ChatApp.Api.Controllers;
 
 /// <summary>
-/// Bulk/administrative endpoints (§9.2). <c>Internal</c> here is just a routing prefix, not an access
-/// boundary (decision B-1) — access is entirely decided by <see cref="AllowedRolesAttribute"/> per
-/// action. Controller default is Administrator-only (the narrowest requirement in this group, backing
-/// <see cref="SetUserRole"/>); the read/digest actions widen that to Administrator+Moderator via an
-/// action-level override.
+/// "Internal" is just a routing prefix, not an access boundary — access is entirely decided by
+/// <see cref="AllowedRolesAttribute"/> per action. Controller default is Administrator-only; read/digest
+/// actions widen to Administrator+Moderator.
 /// </summary>
 [ApiController]
 [Route("api/internal")]
@@ -49,11 +47,7 @@ public sealed class InternalController(ISender sender) : ControllerBase
         return result.ToActionResult();
     }
 
-    /// <summary>
-    /// Sets the system-wide role for one or more existing users, by username (F-1a). Administrator-only
-    /// (the controller default — no action-level override needed here): the only way to promote/demote
-    /// a role is an existing Administrator calling this, never self-service.
-    /// </summary>
+    /// <summary>Administrator-only via the controller default: promoting/demoting a role always requires an existing Administrator, never self-service.</summary>
     [HttpPost("roles")]
     public async Task<IActionResult> SetUserRole([FromBody] SetUserRoleRequest request, CancellationToken cancellationToken = default)
     {

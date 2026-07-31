@@ -11,11 +11,9 @@ using Microsoft.Extensions.Options;
 namespace ChatApp.Api.Realtime;
 
 /// <summary>
-/// The realtime transport (§9.1). Client-to-server methods mirror the two documented on the hub:
-/// <see cref="SendMessage"/> and <see cref="SendImage"/>. Both dispatch through <see cref="ISender"/>
-/// like any other transport (§4.1) and then fire the memory-update seam detached, in a freshly opened
-/// DI scope (§4.1's "anything fired detached must open its own scope" rule) — never awaited, so the
-/// hub method returns as soon as the send itself completes.
+/// SignalR hub for realtime chat. <see cref="SendMessage"/>/<see cref="SendImage"/> dispatch through
+/// <see cref="ISender"/>, then fire the memory-update detached in a freshly opened DI scope — never
+/// awaited, so the hub method returns as soon as the send itself completes.
 /// </summary>
 [Authorize]
 public sealed class ChatHub(
@@ -27,7 +25,7 @@ public sealed class ChatHub(
     IOptions<ConversationMemoryOptions> memoryOptions,
     ILogger<ChatHub> logger) : Hub
 {
-    /// <summary>Adds the connection to a Group per conversation the caller currently participates in (§5) — see the "Group membership" design note.</summary>
+    /// <summary>Adds the connection to a Group per conversation the caller currently participates in.</summary>
     public override async Task OnConnectedAsync()
     {
         currentUserProvider.Principal = Context.User;
@@ -59,7 +57,7 @@ public sealed class ChatHub(
         return base.OnDisconnectedAsync(exception);
     }
 
-    /// <summary>Sends a text message (§9.1); fires the detached memory update on success, counting <paramref name="text"/>'s tokens.</summary>
+    /// <summary>Sends a text message; fires the detached memory update on success, counting <paramref name="text"/>'s tokens.</summary>
     public async Task SendMessage(Guid conversationId, string text)
     {
         currentUserProvider.Principal = Context.User;
@@ -70,7 +68,7 @@ public sealed class ChatHub(
         FireDetachedMemoryUpdate(conversationId, text);
     }
 
-    /// <summary>Sends an image message (§9.1, F-5); fires the detached memory update on success, counting the server-generated caption's tokens.</summary>
+    /// <summary>Sends an image message; fires the detached memory update on success, counting the server-generated caption's tokens.</summary>
     public async Task SendImage(Guid conversationId, string imageUrl)
     {
         currentUserProvider.Principal = Context.User;
@@ -94,8 +92,8 @@ public sealed class ChatHub(
 
     /// <summary>
     /// Runs <see cref="ConversationMemoryService.RecordMessageAndProcessAsync"/> as an un-awaited,
-    /// own-scoped background task (§4.1, §6, A-1/B-2) — never the Hub invocation's own request-scoped
-    /// services, which are disposed as soon as this method returns.
+    /// own-scoped background task — never the Hub invocation's own request-scoped services, which are
+    /// disposed as soon as this method returns.
     /// </summary>
     private void FireDetachedMemoryUpdate(Guid conversationId, string messageText)
     {

@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ChatApp.Api.Extensions;
 
-/// <summary>Maps an Application <see cref="Result"/>/<see cref="Result{T}"/> to the matching HTTP outcome (§4.3).</summary>
 internal static class ResultExtensions
 {
     public static IActionResult ToActionResult(this Result result) =>

@@ -4,10 +4,8 @@ namespace ChatApp.Api.Realtime;
 
 /// <summary>
 /// Tracks which SignalR connection ids belong to which user id, so <see cref="SignalRConversationNotifier"/>
-/// can add/remove an already-connected user's live sockets to/from a conversation's Group the moment
-/// their membership changes, without waiting for their next reconnect. In-memory and single-instance
-/// only — consistent with §13's accepted "single backend instance assumed" limitation; a
-/// multi-instance deployment would need this replaced with a shared backplane (e.g. Redis).
+/// can update an already-connected user's live sockets immediately on a membership change. In-memory
+/// and single-instance only; a multi-instance deployment would need a shared backplane (e.g. Redis).
 /// </summary>
 public interface IUserConnectionTracker
 {

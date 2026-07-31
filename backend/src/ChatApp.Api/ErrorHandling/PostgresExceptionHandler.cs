@@ -4,9 +4,9 @@ using Npgsql;
 namespace ChatApp.Api.ErrorHandling;
 
 /// <summary>
-/// Maps a Postgres constraint violation that slipped past Application's own checks (a race, or a
-/// write path FluentValidation doesn't cover) to the HTTP outcome §4.3 documents — unique-violation
-/// (<c>23505</c>) → 409, check-violation (<c>23514</c>) → 400 — instead of a raw 500.
+/// Maps a Postgres constraint violation that slipped past Application's own checks (a race, or an
+/// uncovered write path) to a proper HTTP status instead of a raw 500: unique-violation → 409,
+/// check-violation → 400.
 /// </summary>
 public sealed class PostgresExceptionHandler : IExceptionHandler
 {

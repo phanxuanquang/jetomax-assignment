@@ -9,11 +9,10 @@ using System.Security.Claims;
 namespace ChatApp.Api.Auth;
 
 /// <summary>
-/// Wires the authentication model (§4.2): a Supabase-JWT scheme for App, a service-key scheme for
-/// Mcp/N8n, and a policy scheme that picks between them per-request so <c>[Authorize]</c>/
-/// <see cref="AllowedRolesAttribute"/> work without controllers or the Hub choosing a scheme
-/// themselves. Client type is purely how identity is established now — every scheme stamps the same
-/// <c>sub</c>/<c>role</c> claim shape, and <see cref="AllowedRolesAttribute"/> is the only authorization gate.
+/// Wires a Supabase-JWT scheme (App), a service-key scheme (Mcp/N8n), and a policy scheme that picks
+/// between them per-request, so controllers/the Hub never choose a scheme themselves. Every scheme
+/// stamps the same <c>sub</c>/<c>role</c> claim shape; <see cref="AllowedRolesAttribute"/> is the only
+/// authorization gate.
 /// </summary>
 public static class AuthenticationSetup
 {
@@ -74,7 +73,7 @@ public static class AuthenticationSetup
                         }
                         return Task.CompletedTask;
                     },
-                    // Stamps the role claim every other scheme also stamps (§4.2) — resolved fresh from
+                    // Stamps the role claim every other scheme also stamps — resolved fresh from
                     // user_roles on every request rather than baked into the JWT, so a mid-session role
                     // change (e.g. a demotion) takes effect on the caller's very next request.
                     OnTokenValidated = async context =>

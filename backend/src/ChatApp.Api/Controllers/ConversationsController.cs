@@ -11,11 +11,10 @@ using MessagesFeature = ChatApp.Application.Features.Messages;
 namespace ChatApp.Api.Controllers;
 
 /// <summary>
-/// Thin REST surface over the <c>Conversations</c>/<c>Messages</c> Application slices (§9.2). Every
-/// action just resolves <see cref="ISender"/> and forwards to the matching command/query — no
-/// business logic lives here. Every action is reachable by any authenticated role except
-/// <see cref="Summarize"/> (Administrator/Moderator only), so only that one carries an
-/// <c>[AllowedRoles]</c> attribute — <c>[Authorize]</c> alone gates the rest.
+/// Thin REST surface over the <c>Conversations</c>/<c>Messages</c> Application slices; every action
+/// just forwards to the matching command/query via <see cref="ISender"/>, no business logic here. Only
+/// <see cref="Summarize"/> carries <c>[AllowedRoles]</c>, since it's the sole action narrower than any
+/// authenticated role.
 /// </summary>
 [ApiController]
 [Route("api/conversations")]

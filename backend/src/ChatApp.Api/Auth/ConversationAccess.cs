@@ -6,12 +6,9 @@ using ChatApp.Domain.Enums;
 namespace ChatApp.Api.Auth;
 
 /// <summary>
-/// Implements <see cref="IConversationAccess"/> over the caller's resolved identity
-/// (<see cref="ICurrentUserProvider"/>) and <see cref="IAppDbContext"/> queries. <see cref="UserId"/>/
-/// <see cref="Role"/> read the <see cref="ClientClaimTypes.Subject"/>/<see cref="ClientClaimTypes.Role"/>
-/// claims set by whichever authentication scheme handled the request — every request now resolves to
-/// a real user before reaching a handler (§4.2), so a missing claim here is a configuration defect,
-/// not a normal caller-facing outcome.
+/// Implements <see cref="IConversationAccess"/> over the caller's resolved identity and DB queries.
+/// <see cref="UserId"/>/<see cref="Role"/> read claims the authentication pipeline guarantees exist, so
+/// a missing claim here is a configuration defect, not a normal caller-facing outcome.
 /// </summary>
 public sealed class ConversationAccess(ICurrentUserProvider currentUserProvider, IAppDbContext db) : IConversationAccess
 {

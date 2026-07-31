@@ -3,13 +3,11 @@ using Microsoft.IdentityModel.Tokens;
 namespace ChatApp.Api.Auth;
 
 /// <summary>
-/// Fetches and caches Supabase's JWKS (<c>{Supabase:Url}/auth/v1/.well-known/jwks.json</c>), per
-/// `prerequisite-setups.md`'s updated guidance: Supabase now defaults to asymmetric (ES256) JWT
-/// signing, and the legacy HS256 secret is published at this same endpoint as a symmetric JWK for
-/// backward compatibility — so validating against the JWKS works for either signing mode, with no
-/// static secret to configure. Keys are cached for <see cref="CacheDuration"/> and refreshed on
-/// expiry; <see cref="GetSigningKeysAsync"/> is safe to call from the synchronous
-/// <c>IssuerSigningKeyResolver</c> callback because steady-state calls hit the cache.
+/// Fetches and caches Supabase's JWKS (<c>{Supabase:Url}/auth/v1/.well-known/jwks.json</c>). Supabase
+/// defaults to asymmetric (ES256) signing, with the legacy HS256 secret also published here as a
+/// symmetric JWK, so validating against the JWKS works for either mode with no static secret to
+/// configure. <see cref="GetSigningKeysAsync"/> is safe to call from the synchronous
+/// <c>IssuerSigningKeyResolver</c> callback because steady-state calls just hit the cache.
 /// </summary>
 public sealed class SupabaseJwksProvider(HttpClient httpClient, Microsoft.Extensions.Options.IOptions<SupabaseJwtOptions> options)
 {

@@ -4,11 +4,10 @@ using Microsoft.OpenApi;
 namespace ChatApp.Api.OpenApi;
 
 /// <summary>
-/// Declares the two ways a request can authenticate (§4.2) in the generated OpenAPI document, so the
-/// Scalar UI's "Authorize" panel lets a developer supply a Supabase JWT (App) or the
-/// <c>X-Client-Key</c>+<c>X-On-Behalf-Of</c> headers (Mcp/N8n — both now require the pair together)
-/// directly, without hand-crafting requests. Dev/test tooling only — has no effect on runtime
-/// authentication, which is entirely driven by <see cref="Auth.AuthenticationSetup"/>.
+/// Declares the two ways a request can authenticate in the generated OpenAPI document, so the Scalar
+/// UI's "Authorize" panel accepts a Supabase JWT (App) or the <c>X-Client-Key</c>+<c>X-On-Behalf-Of</c>
+/// headers (Mcp/N8n) directly. Dev/test tooling only; has no effect on runtime authentication, which is
+/// entirely driven by <see cref="Auth.AuthenticationSetup"/>.
 /// </summary>
 public sealed class SecuritySchemeTransformer : IOpenApiDocumentTransformer
 {

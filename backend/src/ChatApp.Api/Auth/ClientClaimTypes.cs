@@ -5,10 +5,9 @@ internal static class ClientClaimTypes
 {
     /// <summary>
     /// Carries the caller's resolved user id (a <see cref="System.Guid"/>): the Supabase JWT's own
-    /// <c>sub</c> claim for App, or the resolved <c>X-On-Behalf-Of</c> username's id for Mcp/N8n.
-    /// Every call now resolves to a real user (§4.2) — there is no absent case. Uses the raw "sub"
-    /// name (not <see cref="System.Security.Claims.ClaimTypes.NameIdentifier"/>) since JWT inbound
-    /// claim mapping is disabled for the Supabase scheme (see <see cref="AuthenticationSetup"/>).
+    /// <c>sub</c> claim for App, or the resolved <c>X-On-Behalf-Of</c> username's id for Mcp/N8n. Uses
+    /// the raw "sub" name, not <see cref="System.Security.Claims.ClaimTypes.NameIdentifier"/>, since
+    /// inbound claim mapping is disabled for the Supabase scheme (see <see cref="AuthenticationSetup"/>).
     /// </summary>
     public const string Subject = "sub";
 
