@@ -15,13 +15,12 @@ create extension if not exists pgcrypto;   -- gen_random_uuid()
 
 -- Users. profiles.id equals auth.users.id in Supabase (see trigger in §4).
 -- Google OAuth only: username is auto-derived from the email local-part
--- (decision, see backend-system-design-and-architecture.md §4.2).
+-- (decision, see backend-system-design-and-architecture.md §4.2). The email
+-- itself is not stored here — only username, which is all the app needs.
 create table if not exists profiles (
     id            uuid primary key default gen_random_uuid(),
     username      text not null unique
                       check (username ~ '^[A-Za-z0-9]{1,30}$'),   -- letters+digits, <=30
-    email         text not null unique,                            -- from Google; duplicated here for app-level queries
-    is_agent      boolean not null default false,                 -- reserved for AI-posted messages (unused)
     created_time  timestamptz not null default now()
 );
 
@@ -48,7 +47,7 @@ create table if not exists conversations (
     last_message_time timestamptz not null default now()
 );
 
--- Participants of a conversation (owner included). The Agent is NOT a participant.
+-- Participants of a conversation (owner included).
 create table if not exists participants (
     conversation_id uuid not null references conversations(id) on delete cascade,
     user_id         uuid not null references profiles(id)      on delete cascade,
@@ -193,8 +192,8 @@ begin
         candidate := left(base_username, greatest(1, 30 - length(suffix::text))) || suffix::text;
     end loop;
 
-    insert into public.profiles (id, username, email)
-    values (new.id, candidate, new.email)
+    insert into public.profiles (id, username)
+    values (new.id, candidate)
     on conflict (id) do nothing;
 
     insert into public.user_roles (user_id, role)
@@ -217,11 +216,13 @@ begin
 end $$;
 
 -- -----------------------------------------------------------------------------
--- 5. SEED — a hidden system user reserved for AI-posted messages
---    (not currently used by any feature — see database-design.md)
+-- 5. SEED — a reserved system user id, not currently used by any feature
+--    (see database-design.md). No is_agent flag anymore: every caller is now
+--    a real authenticated user (§4.2), so there is no need to distinguish
+--    this row from a human profile at the schema level.
 -- -----------------------------------------------------------------------------
-insert into profiles (id, username, email, is_agent)
-values ('00000000-0000-0000-0000-000000000001', 'aiagent', 'aiagent@system.local', true)
+insert into profiles (id, username)
+values ('00000000-0000-0000-0000-000000000001', 'aiagent')
 on conflict (id) do nothing;
 
 insert into user_roles (user_id, role)
@@ -265,10 +266,9 @@ alter table conversation_memory  enable row level security;
 alter table chunk_memories       enable row level security;
 alter table user_roles           enable row level security;
 
--- profiles: base table read is OWN ROW ONLY — profiles now carries `email`,
--- a PII field the old "everyone reads" policy would have exposed to anyone
--- holding the public anon key. Other users' safe, public fields (id,
--- username, is_agent) are exposed instead through `profiles_public` below.
+-- profiles: base table read is OWN ROW ONLY. profiles no longer carries any
+-- PII (no `email` column), but the own-row-only policy is kept regardless —
+-- other users' fields (id, username) are exposed through `profiles_public` below.
 drop policy if exists profiles_select on profiles;
 create policy profiles_select on profiles for select using (auth.uid() = id);
 drop policy if exists profiles_update on profiles;
@@ -277,10 +277,9 @@ create policy profiles_update on profiles for update
 
 -- Safe subset of profiles, readable by anyone — this is what username-based
 -- lookups (create conversation, add participants) and the backend's own
--- REST layer query, so no path (direct PostgREST or the .NET API) needs to
--- read another user's email.
+-- REST layer query.
 create or replace view public.profiles_public as
-    select id, username, is_agent from public.profiles;
+    select id, username from public.profiles;
 do $$
 begin
     if exists (select 1 from pg_roles where rolname = 'authenticated') then

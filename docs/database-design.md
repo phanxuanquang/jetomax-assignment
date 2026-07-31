@@ -27,8 +27,6 @@ erDiagram
     profiles {
         uuid id PK
         text username UK
-        text email UK
-        bool is_agent
     }
     user_roles {
         uuid user_id PK_FK
@@ -89,10 +87,15 @@ Nine tables: users, user roles, conversations, participants, a table-per-type me
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | uuid | PK | = Supabase auth id |
-| `username` | text | **unique**, `~ '^[A-Za-z0-9]{1,30}$'` | letters + digits, ≤30; **auto-derived from the Google email's local-part** at sign-up (sanitized, numeric-suffix on collision — see the `handle_new_user` trigger). Not user-chosen. |
-| `email` | text | **unique**, not null | from Google OAuth; duplicated onto `profiles` for app-level queries. **PII — not broadly readable**, see RLS below |
-| `is_agent` | boolean | not null, default false | hidden system user reserved for AI-posted messages — **not currently used by any feature** (see note) |
+| `username` | text | **unique**, `~ '^[A-Za-z0-9]{1,30}$'` | letters + digits, ≤30; **auto-derived from the Google email's local-part** at sign-up (sanitized, numeric-suffix on collision — see the `handle_new_user` trigger). Not user-chosen. The email itself is **not stored** — only the derived username. |
 | `created_time` | timestamptz | not null, default now() | |
+
+> **`email` and `is_agent` were removed from `profiles`** (decision, post-pivot): the app only ever
+> needs `username` to identify a user — Google's email is used once at sign-up to derive it and is
+> never stored or queried afterward. `is_agent` existed to flag a hidden system user for AI-posted
+> messages; since every caller (App/Mcp/N8n) now resolves to a real authenticated user (§4.2), there
+> is no "system, no user" case left to distinguish, so the flag is gone. The reserved `aiagent`
+> profile row is still seeded but is now a plain, undistinguished row.
 
 ### user_roles
 | Column | Type | Constraints | Notes |
@@ -116,8 +119,6 @@ Every new user is assigned `User` by default via the `handle_new_user` trigger. 
 | `last_message_time` | timestamptz | not null, default now() | trigger-maintained |
 
 ### participants
-The Agent is **not** a participant, so participant counts are always human.
-
 | Column | Type | Constraints |
 |---|---|---|
 | `conversation_id` | uuid | FK → conversations, on delete cascade |
@@ -130,7 +131,7 @@ The Agent is **not** a participant, so participant counts are always human.
 |---|---|---|---|
 | `id` | uuid | PK | |
 | `conversation_id` | uuid | FK → conversations, on delete cascade | |
-| `user_id` | uuid | FK → profiles, on delete cascade | sender (user or Agent) |
+| `user_id` | uuid | FK → profiles, on delete cascade | sender |
 | `type` | text | check in (`text`,`image`) | **discriminator** |
 | `replies_to_message_id` | uuid | FK → messages, on delete set null | generic reply-to; not currently used by any feature (kept for the reply-threading shape) |
 | `sent_at` | timestamptz | not null, default now() | spec's `Timestamp` |
@@ -211,7 +212,7 @@ The rolling **pointer** is implicit: the newest chunk's `end_message_id` marks w
 | `messages_after_insert` | after insert on messages | updates `last_message_time` |
 | `on_auth_user_created` | after insert on auth.users | provisions a profile (Supabase only) |
 
-Create-time bookkeeping (owner-as-participant + the 1:1 `conversation_memory` row) is done by the **Application layer**, not a trigger (decision A-3) — testable without a DB and visible in code. The Agent is seeded once (`username = aiagent`, `is_agent = true`). **Note:** the previous immutable-`owner_id` trigger was removed — ownership is now transferable.
+Create-time bookkeeping (owner-as-participant + the 1:1 `conversation_memory` row) is done by the **Application layer**, not a trigger (decision A-3) — testable without a DB and visible in code. A reserved profile (`username = aiagent`) is seeded once but carries no distinguishing flag — see the `is_agent` removal note below. **Note:** the previous immutable-`owner_id` trigger was removed — ownership is now transferable.
 
 ---
 
@@ -258,7 +259,7 @@ Policy summary (`auth.uid()` = current user):
 
 | Table | Select | Insert | Update | Delete |
 |---|---|---|---|---|
-| profiles | **own row only** (`auth.uid() = id`) — protects `email`. Other users' safe fields (`id`, `username`, `is_agent`) are read through the **`profiles_public`** view instead | own row | own row | — |
+| profiles | **own row only** (`auth.uid() = id`). Other users' fields (`id`, `username`) are read through the **`profiles_public`** view instead | own row | own row | — |
 | user_roles | **own row only** (`auth.uid() = user_id`) | — (trigger/service role only) | — (no policy — **cannot self-escalate**; only service role or the trigger can write) | — |
 | conversations | `is_participant(id)` & not deleted | `owner_id = auth.uid()` | `is_owner(id)` (rename / readonly / transfer / soft-delete / freeze) | — (soft delete via update) |
 | participants | `is_participant(conversation_id)` | `is_owner(...)` **or** self-join (`user_id=auth.uid()` & `can_join`) | — | `is_owner(...)` **or** self-leave |
@@ -266,7 +267,7 @@ Policy summary (`auth.uid()` = current user):
 | text_messages / image_messages | participant of parent's conversation | caller owns the parent message | service role (caption) | — |
 | conversation_memory / chunk_memories | `is_participant(conversation_id)` | service role | service role | service role |
 
-`profiles_public` is a plain view (`select id, username, is_agent from profiles`) granted to `authenticated`/`anon` — this is what a **username → id lookup** (create conversation, add participants — see architecture §9.2) queries, so no code path ever needs to read another user's email.
+`profiles_public` is a plain view (`select id, username from profiles`) granted to `authenticated`/`anon` — this is what a **username → id lookup** (create conversation, add participants — see architecture §9.2) queries.
 
 Background writes (memory worker) and the caption write on image send run with the **service role**, which bypasses RLS by design.
 
