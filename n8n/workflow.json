@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Setup (do this once before activating)\n\n1. **Config node** (below): edit `baseUrl` to your ChatApp.Api URL (e.g. `https://your-backend.example.com`, no trailing slash).\n2. **Credential — \"ChatApp N8n Key\"**: create an *HTTP Header Auth* credential named exactly `ChatApp N8n Key`, header name `X-Client-Key`, value = the `Clients:N8nKey` secret the backend owner gives you. Every HTTP Request node below already references it by name.\n3. **Google Sheets node** (\"Append To Google Sheet\"): open it, connect your own Google Sheets credential, and pick/create a spreadsheet + sheet with header row: `Type | ConversationId | DisplayName | Summary | GeneratedAt`.\n4. **Schedule Trigger**: change the time if you don't want the default (daily at 00:00).\n5. **Webhook (bottom-left)**: this is the \"web page\" — see the design note near it. If n8n is self-hosted with no public URL, use n8n's built-in tunnel or a reverse proxy so the webhook URL is reachable.\n\nReference docs this workflow was built from: `mcp-n8n-api-reference.md` (auth model, DTOs, endpoint table) + `openapi.json` (exact request shapes).",
+        "content": "## Setup (do this once before activating)\n\n1. **Config node** (below): edit `baseUrl` to your ChatApp.Api URL (e.g. `https://your-backend.example.com`, no trailing slash), and `onBehalfOfUsername` to the username of an existing **Administrator**-role account (§4.2 — role-based auth: every backend call below now sends `X-On-Behalf-Of` with this username, not just the service key).\n2. **Credential — \"ChatApp N8n Key\"**: create an *HTTP Header Auth* credential named exactly `ChatApp N8n Key`, header name `X-Client-Key`, value = the `Clients:N8nKey` secret the backend owner gives you. Every HTTP Request node below already references it by name — open each once and pick it from the credential dropdown if it shows as unlinked after import.\n3. **Google Sheets node** (\"Append To Google Sheet\"): open it, connect your own Google Sheets credential, and pick/create a spreadsheet + sheet with header row: `Type | ConversationId | DisplayName | Summary | GeneratedAt`.\n4. **Schedule Trigger**: change the time if you don't want the default (daily at 00:00).\n5. **Webhook (bottom-left)**: this is the \"web page\" — see the design note near it. If n8n is self-hosted with no public URL, use n8n's built-in tunnel or a reverse proxy so the webhook URL is reachable.\n\nReference docs this workflow was built from: `mcp-n8n-api-reference.md` (auth model, DTOs, endpoint table) + `openapi.json` (exact request shapes).",
         "height": 332,
         "width": 1140
       },
@@ -48,7 +48,7 @@
     },
     {
       "parameters": {
-        "content": "## One thread's AI failure must not break the whole digest\n\n\"Summarize Thread\" and \"Get 24h Rollup\" both have **Continue On Fail** enabled. If Gemini hiccups for one conversation (rate limit, timeout), the next Code node substitutes a placeholder string instead of the run aborting — mirroring the backend's own \"AI failure never blocks\" rule (F-5) at the workflow level.",
+        "content": "## One thread's AI failure must not break the whole digest\n\n\"Summarize Thread\" and \"Get 24h Rollup\" both have **Continue On Fail** enabled. If Gemini hiccups for one conversation (rate limit, timeout), the next Code node substitutes a placeholder string instead of the run aborting — mirroring the backend's own \"AI failure never blocks\" rule (F-5) at the workflow level.\n\nThis also absorbs a real access-control gap: `POST /api/conversations/{id}/summary` only allows a caller who is a **participant** of that conversation. `GET /api/internal/conversations` lists every conversation, regardless of membership. If the `onBehalfOfUsername` Administrator is not a participant of some thread, that thread's summary call gets 403 and falls back to the placeholder — not a bug, just something to know if placeholders show up often.",
         "height": 156,
         "width": 716
       },
@@ -96,6 +96,12 @@
               "name": "hoursAgo",
               "type": "number",
               "value": 24
+            },
+            {
+              "id": "a4d0f8b1-5e2c-4a7d-9c1f-6b8e2d5f0a3c",
+              "name": "onBehalfOfUsername",
+              "type": "string",
+              "value": "YOUR-ADMIN-USERNAME"
             }
           ]
         },
@@ -115,6 +121,15 @@
         "url": "={{ $json.baseUrl }}/api/internal/conversations",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-On-Behalf-Of",
+              "value": "={{ $json.onBehalfOfUsername }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "28c2c43d-471d-49a9-b14f-0bd9e2f59097",
@@ -124,7 +139,13 @@
       "position": [
         96,
         304
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PLACEHOLDER-SELECT-ON-IMPORT",
+          "name": "ChatApp N8n Key"
+        }
+      }
     },
     {
       "parameters": {
@@ -132,6 +153,15 @@
         "url": "={{ $('Config').item.json.baseUrl }}/api/conversations/{{ $json.conversationId }}/summary",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-On-Behalf-Of",
+              "value": "={{ $('Config').item.json.onBehalfOfUsername }}"
+            }
+          ]
+        },
         "options": {
           "batching": {
             "batch": {
@@ -153,7 +183,13 @@
       "position": [
         352,
         304
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PLACEHOLDER-SELECT-ON-IMPORT",
+          "name": "ChatApp N8n Key"
+        }
+      }
     },
     {
       "parameters": {
@@ -243,6 +279,15 @@
             }
           ]
         },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-On-Behalf-Of",
+              "value": "={{ $json.onBehalfOfUsername }}"
+            }
+          ]
+        },
         "options": {
           "response": {
             "response": {
@@ -258,7 +303,13 @@
       "position": [
         96,
         640
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PLACEHOLDER-SELECT-ON-IMPORT",
+          "name": "ChatApp N8n Key"
+        }
+      }
     },
     {
       "parameters": {
@@ -309,6 +360,15 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ digest: $json.digestText, publishedAt: $json.publishedAt }) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-On-Behalf-Of",
+              "value": "={{ $('Config').item.json.onBehalfOfUsername }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "16246d4e-3319-4cb2-ac5c-aa6c793030c2",
@@ -318,7 +378,13 @@
       "position": [
         1600,
         432
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PLACEHOLDER-SELECT-ON-IMPORT",
+          "name": "ChatApp N8n Key"
+        }
+      }
     },
     {
       "parameters": {
