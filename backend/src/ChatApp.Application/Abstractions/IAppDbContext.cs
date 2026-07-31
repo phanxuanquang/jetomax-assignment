@@ -11,7 +11,7 @@ namespace ChatApp.Application.Abstractions;
 /// </summary>
 public interface IAppDbContext
 {
-    /// <summary>All users, including the hidden AI Agent.</summary>
+    /// <summary>All users.</summary>
     IQueryable<User> Users { get; }
 
     /// <summary>All conversations, including soft-deleted ones — handlers must filter <see cref="Conversation.IsDeleted"/> themselves.</summary>

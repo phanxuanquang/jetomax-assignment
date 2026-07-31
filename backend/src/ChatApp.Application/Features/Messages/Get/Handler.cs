@@ -11,10 +11,7 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
     /// <summary>Returns up to <see cref="Query.Limit"/> messages, newest first, strictly older than <see cref="Query.Before"/> when given.</summary>
     public async Task<Result<IReadOnlyList<MessageDto>>> Handle(Query request, CancellationToken cancellationToken)
     {
-        if (conversationAccess.UserId is not { } callerId)
-        {
-            return Result<IReadOnlyList<MessageDto>>.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
-        }
+        var callerId = conversationAccess.UserId;
 
         var isParticipant = await db.AnyAsync(
             db.Participants.Where(p => p.ConversationId == request.ConversationId && p.UserId == callerId),

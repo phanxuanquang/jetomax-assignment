@@ -3,7 +3,7 @@ using ChatApp.Domain.Entities;
 namespace ChatApp.Application.Features.Messages;
 
 /// <summary>Builds a <see cref="MessageDto"/> from a loaded <see cref="Message"/>, branching on its concrete payload type.</summary>
-internal static class MessageMapper
+public static class MessageMapper
 {
     /// <summary>Maps <paramref name="message"/> to a <see cref="MessageDto"/>.</summary>
     public static MessageDto ToDto(Message message) => message switch

@@ -1,5 +1,6 @@
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
+using ChatApp.Application.Memory;
 using ChatApp.Domain.Entities;
 using MediatR;
 
@@ -19,13 +20,11 @@ public sealed class Handler(
     IConversationNotifier notifier) : IRequestHandler<Command, Result<MessageDto>>
 {
     private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(8);
-    private sealed record ImageAnalysis(string? Caption, bool ContainsText);
 
-    private const string AnalysisPrompt = """
-        Look at this image and respond with two things: a short, one-sentence caption describing
-        what it shows, and whether it contains any readable text (signage, screenshots, documents,
-        handwriting, UI, etc.) that a user might want to extract verbatim.
-        """;
+    /// <summary>The caption is shown directly to chat participants (F-5), so this reuses the same human-facing style as conversation summaries.</summary>
+    private const string AnalysisSystemInstruction = ConversationMemoryService.HumanFacingSystemInstruction;
+
+    private const string AnalysisPrompt = "Look at this image and write a short, one-sentence caption describing what it shows.";
 
     /// <summary>
     /// Runs the single on-send vision pass synchronously (caption) with a short timeout; on failure
@@ -34,10 +33,7 @@ public sealed class Handler(
     /// </summary>
     public async Task<Result<MessageDto>> Handle(Command request, CancellationToken cancellationToken)
     {
-        if (conversationAccess.UserId is not { } callerId)
-        {
-            return Result<MessageDto>.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
-        }
+        var callerId = conversationAccess.UserId;
 
         var guard = await conversationAccess.EnsureCanSendAsync(request.ConversationId, cancellationToken);
         if (!guard.IsSuccess)
@@ -47,14 +43,14 @@ public sealed class Handler(
 
         var conversation = guard.Value!;
 
-        var imageAnalysis = await AnalyzeImageAsync(request.ImageUrl, cancellationToken);
+        var caption = await AnalyzeImageAsync(request.ImageUrl, cancellationToken);
 
         var message = new ImageMessage
         {
             ConversationId = conversation.Id,
             UserId = callerId,
             ImageUrl = request.ImageUrl,
-            Caption = imageAnalysis.Caption
+            Caption = caption
         };
         db.Add(message);
         await db.SaveChangesAsync(cancellationToken);
@@ -64,7 +60,7 @@ public sealed class Handler(
         return Result<MessageDto>.Success(MessageMapper.ToDto(message));
     }
 
-    private async Task<ImageAnalysis> AnalyzeImageAsync(string imageUrl, CancellationToken cancellationToken)
+    private async Task<string?> AnalyzeImageAsync(string imageUrl, CancellationToken cancellationToken)
     {
         try
         {
@@ -72,11 +68,11 @@ public sealed class Handler(
             timeoutCts.CancelAfter(VisionTimeout);
 
             var bytes = await storageClient.DownloadAsync(imageUrl, timeoutCts.Token);
-            return await generativeAiService.GenerateContentFromImageAsync<ImageAnalysis>(AnalysisPrompt, bytes, cancellationToken: timeoutCts.Token);
+            return await generativeAiService.GenerateContentFromImageAsync<string>(AnalysisPrompt, bytes, AnalysisSystemInstruction, cancellationToken: timeoutCts.Token);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
-            return new ImageAnalysis(null, false);
+            return null;
         }
     }
 }

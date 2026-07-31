@@ -1,47 +1,34 @@
-﻿using ChatApp.Application.Abstractions;
+using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
-using ChatApp.Domain.Enums;
 using MediatR;
 
-namespace ChatApp.Application.Features.Internal.SetSystemRoleForUsers;
+namespace ChatApp.Application.Features.Internal.SetUserRole;
 
-public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess)
-    : IRequestHandler<Command, Result>
+/// <summary>
+/// Handles <see cref="Command"/>. Role-based authorization is enforced entirely by
+/// <c>[AllowedRoles(UserRole.Administrator)]</c> at the Api layer (§4.2) — this handler only resolves
+/// usernames and applies the role, mirroring every other batch command's all-or-nothing username resolution.
+/// </summary>
+public sealed class Handler(IAppDbContext db) : IRequestHandler<Command, Result>
 {
-    /// <summary>Owner-only: sets the conversation's <c>IsReadonly</c> flag manually.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        var getCurrentUserResult = await conversationAccess.GetCurrentUserAsync(cancellationToken);
-        if (!getCurrentUserResult.IsSuccess)
-        {
-            return Result.Failure(getCurrentUserResult.Error!);
-        }
-
-        var currentUser = getCurrentUserResult.Value;
-        if (currentUser == null)
-        {
-            return Result.Failure(Error.NotFound("404", "User not found."));
-        }
-
-        if (currentUser.Role != UserRole.Administrator)
-        {
-            return Result.Failure(Error.Forbidden("403", "This action is only for administrator."));
-        }
-
-        var targetUsers = await db.ToListAsync(
-            db.Users.Where(u => request.TargetUserIds.Contains(u.Id) && u.Role != request.TargetRole),
+        var distinctUsernames = request.Usernames.Distinct(StringComparer.Ordinal).ToList();
+        var resolvedUsers = await db.ToListAsync(
+            db.Users.Where(u => distinctUsernames.Contains(u.Username)),
             cancellationToken);
 
-        if (targetUsers.Count > 0)
+        if (resolvedUsers.Count != distinctUsernames.Count)
         {
-            foreach (var user in targetUsers)
-            {
-                user.Role = request.TargetRole;
-            }
-
-            await db.SaveChangesAsync(cancellationToken);
+            return Result.Failure(Error.NotFound("user.not_found", "One or more usernames do not resolve to an existing user."));
         }
 
+        foreach (var user in resolvedUsers.Where(u => u.Role != request.Role))
+        {
+            user.Role = request.Role;
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }
 }

@@ -40,6 +40,7 @@ public sealed class Handler(IAppDbContext db, ConversationMemoryService memorySe
 
         var digest = await generativeAiService.GenerateContentAsync<string>(
             ComposeDigestPrompt(request.HoursAgo, threadSummaries),
+            ConversationMemoryService.HumanFacingSystemInstruction,
             cancellationToken: cancellationToken);
 
         return Result<string>.Success(digest);
@@ -50,9 +51,7 @@ public sealed class Handler(IAppDbContext db, ConversationMemoryService memorySe
         var threads = string.Join("\n\n", threadSummaries.Select(t => $"### {t.DisplayName}\n{t.Summary}"));
         return $"""
             Produce one overall summary of chat activity across all conversations active in the
-            last {hoursAgo} hours, based on each conversation's own summary below. Group related
-            activity, keep it concise, and preserve concrete facts: names, decisions, numbers, and
-            negations (things explicitly ruled out or denied).
+            last {hoursAgo} hours, based on each conversation's own summary below. Group related activity.
 
             {threads}
             """;

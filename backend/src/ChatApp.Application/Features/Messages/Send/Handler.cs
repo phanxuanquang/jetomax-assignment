@@ -19,10 +19,7 @@ public sealed class Handler(
     /// <summary>Persists the text message and broadcasts it.</summary>
     public async Task<Result<MessageDto>> Handle(Command request, CancellationToken cancellationToken)
     {
-        if (conversationAccess.UserId is not { } callerId)
-        {
-            return Result<MessageDto>.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
-        }
+        var callerId = conversationAccess.UserId;
 
         var guard = await conversationAccess.EnsureCanSendAsync(request.ConversationId, cancellationToken);
         if (!guard.IsSuccess)

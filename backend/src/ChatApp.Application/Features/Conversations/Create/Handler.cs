@@ -31,19 +31,24 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
         var owner = ownerResult.Value!;
         var ownerId = owner.Id;
 
-        var otherIds = request.ParticipantUserIds.Where(id => id != ownerId).Distinct().ToList();
-        if (otherIds.Count == 0)
+        var otherUsernames = request.ParticipantUsernames
+            .Where(username => !string.Equals(username, owner.Username, StringComparison.Ordinal))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (otherUsernames.Count == 0)
         {
             return Result<ConversationDto>.Failure(Error.Validation(
                 "conversation.create.needs_other_participant",
                 "A conversation needs at least one other participant besides the caller."));
         }
 
-        var others = await db.ToListAsync(db.Users.Where(u => otherIds.Contains(u.Id) && !u.IsAgent), cancellationToken);
-        if (others.Count != otherIds.Count)
+        var others = await db.ToListAsync(db.Users.Where(u => otherUsernames.Contains(u.Username)), cancellationToken);
+        if (others.Count != otherUsernames.Count)
         {
             return Result<ConversationDto>.Failure(Error.NotFound("user.not_found", "One or more participants do not exist."));
         }
+
+        var otherIds = others.Select(u => u.Id).ToList();
 
         var publicId = await GeneratePublicIdAsync(db, cancellationToken);
         if (publicId is null)

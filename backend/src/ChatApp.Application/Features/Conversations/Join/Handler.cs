@@ -16,10 +16,7 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
     /// </summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
-        if (conversationAccess.UserId is not { } currentUserId)
-        {
-            return Result.Failure(Error.Unexpected("caller.identity_required", "This action requires a signed-in user."));
-        }
+        var currentUserId = conversationAccess.UserId;
 
         var conversation = await db.FirstOrDefaultAsync(
             db.Conversations.Where(c => c.PublicId == request.PublicId && !c.IsDeleted),

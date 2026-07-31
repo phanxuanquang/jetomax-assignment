@@ -2,7 +2,7 @@ using FluentValidation;
 
 namespace ChatApp.Application.Features.Conversations.RemoveParticipants;
 
-/// <summary>Validates the shape of <see cref="Command"/>: a valid conversation id and at least one distinct, non-empty user id.</summary>
+/// <summary>Validates the shape of <see cref="Command"/>: a valid conversation id and at least one distinct, well-formed username.</summary>
 public sealed class Validator : AbstractValidator<Command>
 {
     /// <summary>Defines the validation rules for <see cref="Command"/>.</summary>
@@ -10,15 +10,15 @@ public sealed class Validator : AbstractValidator<Command>
     {
         RuleFor(x => x.ConversationId).NotEmpty();
 
-        RuleFor(x => x.UserIds)
-            .NotEmpty().WithMessage("At least one user id is required.");
+        RuleFor(x => x.Usernames)
+            .NotEmpty().WithMessage("At least one username is required.");
 
-        RuleForEach(x => x.UserIds)
-            .NotEqual(Guid.Empty).WithMessage("User ids must not be empty.");
+        RuleForEach(x => x.Usernames)
+            .Matches("^[A-Za-z0-9]{1,30}$").WithMessage("Usernames must be 1-30 letters/digits.");
 
-        RuleFor(x => x.UserIds)
-            .Must(ids => ids.Distinct().Count() == ids.Count)
-            .WithMessage("User ids must not contain duplicates.")
-            .When(x => x.UserIds.Count > 0);
+        RuleFor(x => x.Usernames)
+            .Must(names => names.Distinct(StringComparer.Ordinal).Count() == names.Count)
+            .WithMessage("Usernames must not contain duplicates.")
+            .When(x => x.Usernames.Count > 0);
     }
 }

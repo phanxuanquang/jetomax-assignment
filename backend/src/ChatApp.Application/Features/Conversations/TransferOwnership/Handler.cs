@@ -8,7 +8,7 @@ namespace ChatApp.Application.Features.Conversations.TransferOwnership;
 public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess)
     : IRequestHandler<Command, Result>
 {
-    /// <summary>Owner-only: transfers ownership to <see cref="Command.NewOwnerUserId"/>, who must already be a participant.</summary>
+    /// <summary>Owner-only: resolves <see cref="Command.NewOwnerUsername"/> to a user who must already be a participant, then transfers ownership to them.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
         var guard = await conversationAccess.GetOwnedConversationAsync(request.ConversationId, cancellationToken);
@@ -19,8 +19,17 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
 
         var conversation = guard.Value!;
 
+        var newOwner = await db.FirstOrDefaultAsync(
+            db.Users.Where(u => u.Username == request.NewOwnerUsername),
+            cancellationToken);
+
+        if (newOwner is null)
+        {
+            return Result.Failure(Error.NotFound("user.not_found", "The new owner's username does not resolve to an existing user."));
+        }
+
         var newOwnerIsParticipant = await db.AnyAsync(
-            db.Participants.Where(p => p.ConversationId == conversation.Id && p.UserId == request.NewOwnerUserId),
+            db.Participants.Where(p => p.ConversationId == conversation.Id && p.UserId == newOwner.Id),
             cancellationToken);
 
         if (!newOwnerIsParticipant)
@@ -28,7 +37,7 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
             return Result.Failure(Error.NotFound("conversation.transfer.not_participant", "The new owner must already be a participant of this conversation."));
         }
 
-        conversation.OwnerId = request.NewOwnerUserId;
+        conversation.OwnerId = newOwner.Id;
         await db.SaveChangesAsync(cancellationToken);
         return Result.Success();
     }

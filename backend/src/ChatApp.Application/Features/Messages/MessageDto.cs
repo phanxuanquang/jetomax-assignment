@@ -9,7 +9,7 @@ namespace ChatApp.Application.Features.Messages;
 /// </summary>
 /// <param name="Id">The message's id.</param>
 /// <param name="ConversationId">The conversation this message belongs to.</param>
-/// <param name="SenderUserId">The sender's user id; may be the hidden AI Agent's id.</param>
+/// <param name="SenderUserId">The sender's user id.</param>
 /// <param name="Type">Which payload group is populated.</param>
 /// <param name="RepliesToMessageId">The message this one replies to, if any.</param>
 /// <param name="SentAt">When the message was sent.</param>
