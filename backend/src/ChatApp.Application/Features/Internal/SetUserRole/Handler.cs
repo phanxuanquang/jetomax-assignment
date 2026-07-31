@@ -6,8 +6,8 @@ namespace ChatApp.Application.Features.Internal.SetUserRole;
 
 /// <summary>
 /// Handles <see cref="Command"/>. Role-based authorization is enforced entirely by
-/// <c>[AllowedRoles(UserRole.Administrator)]</c> at the Api layer (§4.2) — this handler only resolves
-/// usernames and applies the role, mirroring every other batch command's all-or-nothing username resolution.
+/// <c>[AllowedRoles(UserRole.Administrator)]</c> at the Api layer — this handler only resolves
+/// usernames and applies the role, all-or-nothing.
 /// </summary>
 public sealed class Handler(IAppDbContext db) : IRequestHandler<Command, Result>
 {

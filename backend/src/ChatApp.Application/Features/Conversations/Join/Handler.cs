@@ -9,11 +9,7 @@ namespace ChatApp.Application.Features.Conversations.Join;
 public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess, IConversationNotifier notifier)
     : IRequestHandler<Command, Result>
 {
-    /// <summary>
-    /// Looks up the conversation by <c>PublicId</c>, rejects frozen/deleted/missing conversations,
-    /// and adds the caller as a participant unless already joined. Mirrors the DB's 1↔2 readonly
-    /// auto-clear boundary when this join brings membership to exactly 2.
-    /// </summary>
+    /// <summary>Rejects frozen/deleted/missing conversations; adds the caller as a participant unless already joined, clearing <c>IsReadonly</c> if membership reaches exactly 2.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
         var currentUserId = conversationAccess.UserId;

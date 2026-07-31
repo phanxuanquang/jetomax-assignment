@@ -5,12 +5,7 @@ using MediatR;
 
 namespace ChatApp.Application.Features.Messages.Send;
 
-/// <summary>
-/// Handles <see cref="Command"/>. Persists and broadcasts only — never touches conversation memory
-/// (§6, A-1/B-2): the memory update runs detached, in its own DI scope, fired by the Api layer after
-/// this handler returns, via <see cref="Memory.ConversationMemoryService.RecordMessageAndProcessAsync"/>
-/// with this message's <see cref="Domain.Entities.TextMessage.Content"/> as the text to count.
-/// </summary>
+/// <summary>Persists and broadcasts only; the conversation memory update runs detached, in its own DI scope, fired by the Api layer after this handler returns.</summary>
 public sealed class Handler(
     IAppDbContext db,
     IConversationAccess conversationAccess,

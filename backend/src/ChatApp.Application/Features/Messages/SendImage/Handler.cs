@@ -6,12 +6,7 @@ using MediatR;
 
 namespace ChatApp.Application.Features.Messages.SendImage;
 
-/// <summary>
-/// Handles <see cref="Command"/>. Persists and broadcasts only — never touches conversation memory
-/// (§6, A-1/B-2): the memory update runs detached, in its own DI scope, fired by the Api layer after
-/// this handler returns, via <see cref="Memory.ConversationMemoryService.RecordMessageAndProcessAsync"/>
-/// with this message's <see cref="ImageMessage.Caption"/> as the text to count.
-/// </summary>
+/// <summary>Persists and broadcasts only; the conversation memory update runs detached, in its own DI scope, fired by the Api layer after this handler returns.</summary>
 public sealed class Handler(
     IAppDbContext db,
     IConversationAccess conversationAccess,
@@ -21,16 +16,12 @@ public sealed class Handler(
 {
     private static readonly TimeSpan VisionTimeout = TimeSpan.FromSeconds(8);
 
-    /// <summary>The caption is shown directly to chat participants (F-5), so this reuses the same human-facing style as conversation summaries.</summary>
+    /// <summary>The caption is shown directly to chat participants, so it reuses the same human-facing style as conversation summaries.</summary>
     private const string AnalysisSystemInstruction = ConversationMemoryService.HumanFacingSystemInstruction;
 
     private const string AnalysisPrompt = "Look at this image and write a short, one-sentence caption describing what it shows.";
 
-    /// <summary>
-    /// Runs the single on-send vision pass synchronously (caption) with a short timeout; on failure
-    /// or timeout it falls back to no caption so the image still sends (F-5's edge case: AI failure
-    /// never blocks the message). Then persists the image message and broadcasts it.
-    /// </summary>
+    /// <summary>Runs the on-send vision pass synchronously with a short timeout, falling back to no caption on failure or timeout so the image still sends; then persists and broadcasts it.</summary>
     public async Task<Result<MessageDto>> Handle(Command request, CancellationToken cancellationToken)
     {
         var callerId = conversationAccess.UserId;

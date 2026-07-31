@@ -1,17 +1,16 @@
 namespace ChatApp.Application.Abstractions;
 
 /// <summary>
-/// The single AI port (decision Q-A): text generation, image-grounded generation, and token
-/// counting, backed by Google Gemini via Semantic Kernel in Infrastructure. Callers in Application
-/// compose the prompt string and the desired response shape <typeparamref name="T"/>; Infrastructure
-/// only executes the call and produces a value of that shape — it does not hold or know about the
-/// prompt's content (decision A-2b).
+/// The single AI port: text generation, image-grounded generation, and token counting, backed by
+/// Google Gemini via Semantic Kernel in Infrastructure. Callers in Application compose the prompt
+/// string and the desired response shape <typeparamref name="T"/>; Infrastructure only executes the
+/// call and produces a value of that shape — it does not hold or know about the prompt's content.
 /// </summary>
 public interface IGenerativeAiService
 {
     /// <summary>
-    /// Counts <paramref name="text"/>'s tokens for the configured model. A real, remote call
-    /// (decision B-7) — never run on the message-send response path; only from a detached scope.
+    /// Counts <paramref name="text"/>'s tokens for the configured model. A real, remote call —
+    /// never run on the message-send response path; only from a detached scope.
     /// </summary>
     Task<int> CountTokensAsync(string text, CancellationToken cancellationToken = default);
 

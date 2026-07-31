@@ -4,7 +4,7 @@ using ChatApp.Domain.Entities;
 namespace ChatApp.Application.Abstractions;
 
 /// <summary>
-/// The port onto realtime broadcast (§5). Postgres is the source of truth; these calls only notify
+/// The port onto realtime broadcast. Postgres is the source of truth; these calls only notify
 /// connected clients so they can update live — a reconnecting client always re-fetches from REST/queries.
 /// </summary>
 public interface IConversationNotifier

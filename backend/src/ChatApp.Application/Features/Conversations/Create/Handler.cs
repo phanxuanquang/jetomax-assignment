@@ -14,12 +14,7 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
     private const int PublicIdLength = 6;
     private const int MaxPublicIdAttempts = 10;
 
-    /// <summary>
-    /// Validates the other participants exist, generates a unique <c>PublicId</c> and initial
-    /// <c>DisplayName</c>, and creates the conversation with the caller as owner alongside its
-    /// owner/other participant rows and empty memory row (decision A-3: this handler is the sole
-    /// writer of that create-time bookkeeping — there is no DB trigger for it).
-    /// </summary>
+    /// <summary>Creates the conversation plus its owner/participant rows and empty memory row directly — there is no DB trigger for this bookkeeping.</summary>
     public async Task<Result<ConversationDto>> Handle(Command request, CancellationToken cancellationToken)
     {
         var ownerResult = await conversationAccess.GetCurrentUserAsync(cancellationToken);

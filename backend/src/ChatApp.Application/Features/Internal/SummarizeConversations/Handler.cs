@@ -6,10 +6,10 @@ using MediatR;
 namespace ChatApp.Application.Features.Internal.SummarizeConversations;
 
 /// <summary>
-/// Handles <see cref="Query"/>. Produces n8n's one 24-hour roll-up digest (§6.2) by reading each
-/// active conversation's own on-demand summary via <see cref="ConversationMemoryService"/> directly
-/// — never through <c>IMediator</c> — then folding all of them into a single overall digest. A pure
-/// read, like the per-thread summary it reuses: nothing here mutates stored memory.
+/// Handles <see cref="Query"/>. Produces the 24-hour roll-up digest by reading each active
+/// conversation's own on-demand summary via <see cref="ConversationMemoryService"/> directly — never
+/// through <c>IMediator</c> — then folding all of them into a single overall digest. A pure read:
+/// nothing here mutates stored memory.
 /// </summary>
 public sealed class Handler(IAppDbContext db, ConversationMemoryService memoryService, IGenerativeAiService generativeAiService)
     : IRequestHandler<Query, Result<string>>

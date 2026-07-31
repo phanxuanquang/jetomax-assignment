@@ -5,13 +5,9 @@ using ChatApp.Domain.Enums;
 namespace ChatApp.Application.Abstractions;
 
 /// <summary>
-/// The port onto the caller's resolved identity, set by the Api layer's authentication step (§4.2)
-/// from the JWT (App) or the on-behalf-of header (Mcp/N8n) — every call, from every channel, now
-/// resolves to a real authenticated user before a handler runs, so <see cref="UserId"/>/<see cref="Role"/>
-/// are never absent in practice. Also carries the two conversation-access checks that depend on that
-/// identity, so handlers don't need to re-query membership/ownership themselves. Role-based
-/// authorization (which roles may reach a given endpoint) is an Api-layer concern (<c>[AllowedRoles]</c>,
-/// §4.2) and is not enforced here — <see cref="Role"/> is exposed for handlers/Api to read, not for this
+/// The caller's resolved identity, set by the Api layer's authentication step, plus the two
+/// conversation-access checks that depend on it. Role-based authorization (<c>[AllowedRoles]</c>) is
+/// an Api-layer concern, not enforced here — <see cref="Role"/> is exposed for reading, not for this
 /// port to gate on.
 /// </summary>
 public interface IConversationAccess
@@ -41,7 +37,7 @@ public interface IConversationAccess
     /// <summary>
     /// Loads the non-deleted conversation <paramref name="conversationId"/> and confirms the caller
     /// may send into it: must be a participant, and — when the conversation is read-only — must be
-    /// its owner (F-4). Fails with <see cref="ErrorType.Forbidden"/>/<see cref="ErrorType.NotFound"/>/
+    /// its owner. Fails with <see cref="ErrorType.Forbidden"/>/<see cref="ErrorType.NotFound"/>/
     /// <see cref="ErrorType.Conflict"/> accordingly. Backs <c>Send</c>/<c>SendImage</c>.
     /// </summary>
     Task<Result<Conversation>> EnsureCanSendAsync(Guid conversationId, CancellationToken cancellationToken = default);

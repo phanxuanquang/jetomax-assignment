@@ -8,16 +8,7 @@ namespace ChatApp.Application.Features.Conversations.Leave;
 public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess, IConversationNotifier notifier)
     : IRequestHandler<Command, Result>
 {
-    /// <summary>
-    /// Removes the caller's participant row (mirroring the DB's 1↔2 readonly auto-set boundary),
-    /// and — only when the caller is the owner — soft-deletes or freezes the conversation per
-    /// <see cref="Command.Mode"/>. On delete (decision B-5), every participant is notified in
-    /// realtime — via <see cref="IConversationNotifier.NotifyMemberChangedAsync"/> with
-    /// <see cref="MemberChangeAction.Left"/>, the same event the API already documents for realtime
-    /// membership changes — and the owner's own participant row is removed, same as any other leave;
-    /// every other participant's row is retained (soft-delete keeps rows, per the no-hard-delete
-    /// rule; only the owner's leave-style removal applies).
-    /// </summary>
+    /// <summary>Removes the caller's participant row, setting <c>IsReadonly</c> if membership drops to 1 or fewer; an owner additionally soft-deletes or freezes per <see cref="Command.Mode"/>. On delete, every participant's row is retained (never hard-deleted) and all are notified as <see cref="MemberChangeAction.Left"/>.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
         var currentUserId = conversationAccess.UserId;

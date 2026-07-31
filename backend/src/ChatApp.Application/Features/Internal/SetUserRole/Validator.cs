@@ -2,7 +2,6 @@ using FluentValidation;
 
 namespace ChatApp.Application.Features.Internal.SetUserRole;
 
-/// <summary>Validates the shape of <see cref="Command"/>: at least one distinct, well-formed username, and a defined role.</summary>
 public sealed class Validator : AbstractValidator<Command>
 {
     public Validator()

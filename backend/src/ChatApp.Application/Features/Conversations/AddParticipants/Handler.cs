@@ -9,12 +9,7 @@ namespace ChatApp.Application.Features.Conversations.AddParticipants;
 public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess, IConversationNotifier notifier)
     : IRequestHandler<Command, Result>
 {
-    /// <summary>
-    /// Owner-only: resolves every username in <see cref="Command.Usernames"/> to an existing user —
-    /// if any doesn't resolve, the whole batch fails and nothing is added — then adds whichever
-    /// resolved ids aren't already participants. Mirrors the DB's 1↔2 readonly auto-clear boundary
-    /// when this batch brings membership from below 2 up to 2 or more.
-    /// </summary>
+    /// <summary>Owner-only: an unresolved username fails the whole batch; clears <c>IsReadonly</c> if this pushes membership from below 2 to 2 or more.</summary>
     public async Task<Result> Handle(Command request, CancellationToken cancellationToken)
     {
         var guard = await conversationAccess.GetOwnedConversationAsync(request.ConversationId, cancellationToken);

@@ -8,7 +8,7 @@ namespace ChatApp.Application.Common.Behaviors;
 /// Runs every registered <see cref="IValidator{T}"/> for <typeparamref name="TRequest"/> before the
 /// handler executes. If any validator reports a failure, the pipeline short-circuits and returns a
 /// <see cref="ErrorType.Validation"/> failure instead of invoking the handler — this is the only
-/// place format/shape validation happens; stateful business rules stay in the handler (§4.3).
+/// place format/shape validation happens; stateful business rules stay in the handler.
 /// </summary>
 /// <typeparam name="TRequest">The command or query being validated.</typeparam>
 /// <typeparam name="TResponse">The handler's response type; must be a <see cref="Result"/> or <see cref="Result{T}"/>.</typeparam>

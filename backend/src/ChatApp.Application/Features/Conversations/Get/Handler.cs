@@ -10,11 +10,7 @@ namespace ChatApp.Application.Features.Conversations.Get;
 public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess)
     : IRequestHandler<Query, Result<IReadOnlyList<ConversationDto>>>
 {
-    /// <summary>
-    /// Returns the caller's non-deleted conversations, most recently active first, optionally
-    /// filtered by <c>DisplayName</c>. Fetches every returned conversation's participants in a
-    /// single batched query rather than one query per conversation.
-    /// </summary>
+    /// <summary>Returns the caller's non-deleted conversations, most recently active first, optionally filtered by <c>DisplayName</c>; batches the participant lookup instead of querying per conversation.</summary>
     public async Task<Result<IReadOnlyList<ConversationDto>>> Handle(Query request, CancellationToken cancellationToken)
     {
         var currentUserId = conversationAccess.UserId;

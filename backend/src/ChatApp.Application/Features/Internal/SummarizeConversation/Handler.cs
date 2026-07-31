@@ -6,9 +6,8 @@ using MediatR;
 namespace ChatApp.Application.Features.Internal.SummarizeConversation;
 
 /// <summary>
-/// Handles <see cref="Query"/>. Serves the one on-demand-summary endpoint shared by the in-app
-/// "Summarize" action and the MCP <c>summarize_thread</c> tool (F-7) — both reach it as a "member"
-/// of the conversation, per §9.2. A pure read (decision C-3): calls <see cref="ConversationMemoryService"/>
+/// Handles <see cref="Query"/>. Shared by the in-app Summarize action and the MCP summarize_thread
+/// tool; caller must already be a participant. A pure read: calls <see cref="ConversationMemoryService"/>
 /// directly — never through <c>IMediator</c> — and never mutates stored memory or the pending-token counter.
 /// </summary>
 public sealed class Handler(IAppDbContext db, IConversationAccess conversationAccess, ConversationMemoryService memoryService)

@@ -1,7 +1,7 @@
 namespace ChatApp.Application.Memory;
 
 /// <summary>
-/// The two unfolded parts of an on-demand summary (§6), before <see cref="ConversationMemoryService"/>
+/// The two unfolded parts of an on-demand summary, before <see cref="ConversationMemoryService"/>
 /// combines them into the single summary it actually returns. Internal to the memory pipeline — no
 /// other caller needs the parts separately.
 /// </summary>

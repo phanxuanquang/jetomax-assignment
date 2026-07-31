@@ -4,32 +4,21 @@ using ChatApp.Domain.Entities;
 namespace ChatApp.Application.Memory;
 
 /// <summary>
-/// The one plain service that owns the hierarchical rolling summarization pipeline (§6): counting a
-/// new message's tokens, folding a chunk into the rolling global memory once the pending-token
-/// threshold is crossed, and serving on-demand summaries as a pure read. Uses only Application ports
-/// (<see cref="IAppDbContext"/>, <see cref="IGenerativeAiService"/>) — no direct AI SDK or EF Core
-/// calls, and no <c>IMediator</c> dispatch (§4.1). Called directly by <c>Send</c>/<c>SendImage</c>'s
-/// detached, own-scope trigger (wired in the Api task) and by the <c>Internal.SummarizeConversation</c>/
-/// <c>SummarizeConversations</c> on-demand handlers.
-/// <para>
-/// <b>Two distinct writing styles, by audience.</b> <c>chunk_memories.memory</c> (the per-chunk fold
-/// input) is never read by anything except this service's own next fold — it is a pure machine-to-machine
-/// artifact, so it is generated in a terse, "caveman" register (articles/filler/hedging dropped,
-/// telegraphic fragments) to keep it token-frugal. <c>conversation_memory.global_memory</c> and the
-/// on-demand "recent tail" summary are both directly returned to a human (or ChatGPT/n8n on a human's
-/// behalf) — see <see cref="GetOnDemandSummaryAsync"/>, which can return <c>global_memory</c> completely
-/// unprocessed — so both are always produced/maintained in clear, concise, natural English.
-/// </para>
+/// Owns the hierarchical rolling summarization pipeline: counts a new message's tokens, folds a chunk
+/// into the rolling global memory once the pending-token threshold is crossed, and serves on-demand
+/// summaries as a pure read. Uses only Application ports (<see cref="IAppDbContext"/>,
+/// <see cref="IGenerativeAiService"/>) — no direct AI SDK or EF Core calls, and no <c>IMediator</c>
+/// dispatch. <c>chunk_memories.memory</c> is a machine-only fold input, so it's written in a terse
+/// "caveman" register to stay token-frugal; <c>global_memory</c> and the on-demand summary are always
+/// returned to a human, so they're always clear, natural English.
 /// </summary>
 public sealed class ConversationMemoryService(IAppDbContext db, IGenerativeAiService generativeAiService)
 {
     /// <summary>
-    /// The detached-per-send seam (§6, A-1/B-2/B-7): counts <paramref name="messageText"/>'s tokens
-    /// remotely, adds them to the conversation's pending counter, and — only if that crosses
-    /// <paramref name="thresholdTokens"/> — summarizes the pending chunk, folds it into global
-    /// memory, and resets the counter. A no-op if the conversation has no memory row. This method is
-    /// stateless with respect to any ambient request and safe to call from a freshly opened DI scope;
-    /// it does not open that scope itself — the caller (Api's send-triggered detached task) is
+    /// Counts <paramref name="messageText"/>'s tokens, adds them to the conversation's pending
+    /// counter, and — only if that crosses <paramref name="thresholdTokens"/> — folds the pending
+    /// chunk into global memory and resets the counter. A no-op if the conversation has no memory
+    /// row. Stateless and safe to call from a freshly opened DI scope; the caller owns that scope.
     /// </summary>
     public async Task RecordMessageAndProcessAsync(Guid conversationId, string messageText, int thresholdTokens, CancellationToken cancellationToken)
     {
@@ -54,8 +43,8 @@ public sealed class ConversationMemoryService(IAppDbContext db, IGenerativeAiSer
 
     /// <summary>
     /// Returns the conversation's current global memory combined with a fresh summary of every
-    /// message after the last chunk's pointer, as one on-demand summary (§6, C-3: pure read — never
-    /// mutates stored memory or resets the pending counter, regardless of the threshold).
+    /// message after the last chunk's pointer. A pure read — never mutates stored memory or resets
+    /// the pending counter, regardless of the threshold.
     /// </summary>
     public async Task<string> GetOnDemandSummaryAsync(Guid conversationId, CancellationToken cancellationToken)
     {
@@ -191,8 +180,8 @@ public sealed class ConversationMemoryService(IAppDbContext db, IGenerativeAiSer
     }
 
     /// <summary>
-    /// Produces the on-demand "recent tail" summary — returned directly as part of a human-facing
-    /// summary (§6), so it uses <see cref="HumanFacingSystemInstruction"/>.
+    /// Produces the on-demand "recent tail" summary — returned directly to a human, so it uses
+    /// <see cref="HumanFacingSystemInstruction"/>.
     /// </summary>
     private async Task<string> SummarizeRecentAsync(string currentGlobalMemory, IReadOnlyList<Message> messages, CancellationToken cancellationToken)
     {
@@ -213,8 +202,8 @@ public sealed class ConversationMemoryService(IAppDbContext db, IGenerativeAiSer
 
     /// <summary>
     /// Folds <paramref name="newSummary"/> into <paramref name="currentGlobalMemory"/>, producing the
-    /// next <c>global_memory</c> — always human-facing (§6, C-3: can be returned to a caller
-    /// completely unprocessed), so this always writes/maintains clear natural English even though
+    /// next <c>global_memory</c> — always human-facing, since it can be returned to a caller
+    /// completely unprocessed, so this always writes clear natural English even though
     /// <paramref name="newSummary"/> may itself be a terse chunk note from <see cref="SummarizeChunkAsync"/>.
     /// </summary>
     private async Task<string> CombineAsync(string currentGlobalMemory, string newSummary, CancellationToken cancellationToken)
