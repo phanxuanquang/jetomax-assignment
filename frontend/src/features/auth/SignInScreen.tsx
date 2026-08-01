@@ -5,16 +5,19 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase/client";
 import { GoogleIcon } from "./GoogleIcon";
 
-export function SignInScreen() {
+export function SignInScreen({ redirect = "/" }: { redirect?: string }) {
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   async function handleSignIn() {
     setIsSigningIn(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      // Forces Google's account chooser every time, instead of silently
-      // re-using whichever Google account is currently logged into the browser.
-      options: { queryParams: { prompt: "select_account" } },
+      options: {
+        // Forces Google's account chooser every time, instead of silently
+        // re-using whichever Google account is currently logged into the browser.
+        queryParams: { prompt: "select_account" },
+        redirectTo: `${window.location.origin}${redirect}`,
+      },
     });
     if (error) {
       toast.error(error.message);
