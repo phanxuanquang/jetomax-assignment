@@ -9,11 +9,6 @@ using InternalFeatures = ChatApp.Application.Features.Internal;
 
 namespace ChatApp.Api.Controllers;
 
-/// <summary>
-/// "Internal" is just a routing prefix, not an access boundary — access is entirely decided by
-/// <see cref="AllowedRolesAttribute"/> per action. Controller default is Administrator-only; read/digest
-/// actions widen to Administrator+Moderator.
-/// </summary>
 [ApiController]
 [Route("api/internal")]
 [Authorize]
@@ -52,8 +47,8 @@ public sealed class InternalController(ISender sender) : ControllerBase
         return result.ToActionResult();
     }
 
-    /// <summary>Administrator-only via the controller default: promoting/demoting a role always requires an existing Administrator, never self-service.</summary>
     [HttpPost("roles")]
+    [AllowedRoles(UserRole.Administrator)]
     public async Task<IActionResult> SetUserRole([FromBody] SetUserRoleRequest request, CancellationToken cancellationToken = default)
     {
         var result = await sender.Send(new InternalFeatures.SetUserRole.Command(request.Usernames, request.Role), cancellationToken);

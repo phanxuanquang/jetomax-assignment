@@ -7,3 +7,8 @@ export async function fetchUserByIdOrUsername(idOrUsername: string): Promise<Use
   );
   return data;
 }
+
+export async function fetchSigninUserMeta(): Promise<UserMeta> {
+  const { data } = await apiClient.get<UserMeta>("/api/users/me");
+  return data;
+}

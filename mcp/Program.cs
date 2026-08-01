@@ -1,3 +1,4 @@
+using ChatApp.Mcp.Auth;
 using ChatApp.Mcp.Backend;
 using ChatApp.Mcp.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -28,8 +29,8 @@ builder.Services.AddOptions<BackendOptions>()
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-builder.Services.AddOptions<Auth0Options>()
-    .Bind(builder.Configuration.GetSection("Auth0"))
+builder.Services.AddOptions<SupabaseOptions>()
+    .Bind(builder.Configuration.GetSection("Supabase"))
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
@@ -41,43 +42,49 @@ builder.Services.AddHttpClient<BackendClient>((services, client) =>
     client.DefaultRequestHeaders.Add("X-On-Behalf-Of", options.OnBehalfOfUsername);
 });
 
-var auth0 = builder.Configuration.GetSection("Auth0").Get<Auth0Options>()
-    ?? throw new InvalidOperationException("Missing Auth0 configuration.");
-var authority = $"https://{auth0.Domain}/";
+var supabase = builder.Configuration.GetSection("Supabase").Get<SupabaseOptions>()
+    ?? throw new InvalidOperationException("Missing Supabase configuration.");
+var authority = supabase.Url.TrimEnd('/') + "/auth/v1";
 
-// This server only checks "is the token a valid Auth0 access token for our audience" - not who the
+builder.Services.AddHttpClient<SupabaseJwksProvider>();
+
+// This server only checks "is the token a valid Supabase OAuth-server access token" - not who the
 // human behind it is, since every tool call acts on the one fixed Backend:OnBehalfOfUsername account
-// regardless. Real per-user identity is Auth0's job (Universal Login), not this server's.
+// regardless. Real per-user identity is Supabase's job (its OAuth consent screen), not this server's.
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultChallengeScheme = McpAuthenticationDefaults.AuthenticationScheme;
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-.AddJwtBearer(options =>
-{
-    options.Authority = authority;
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidIssuer = authority,
-        ValidateAudience = true,
-        ValidAudience = auth0.Audience,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-    };
-})
+.AddJwtBearer(options => { })
 .AddMcp(options =>
 {
     options.ResourceMetadata = new()
     {
-        Resource = auth0.Audience,
+        Resource = supabase.ResourceUri,
         AuthorizationServers = { authority },
     };
 });
 
+// Configured out-of-line (rather than inline in AddJwtBearer above) because it needs the
+// DI-registered SupabaseJwksProvider, which the plain Action<JwtBearerOptions> delegate can't reach.
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<SupabaseJwksProvider>((options, jwks) =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = authority,
+            ValidateAudience = true,
+            ValidAudience = "authenticated",
+            ValidateLifetime = true,
+            IssuerSigningKeyResolver = (_, _, _, _) =>
+                jwks.GetSigningKeysAsync(CancellationToken.None).GetAwaiter().GetResult(),
+        };
+    });
+
 builder.Services.AddAuthorization();
 
-// Stateful: fine for this server's request volume, and this is the version's own default anyway.
 builder.Services.AddMcpServer()
     .WithHttpTransport(o => o.Stateless = false)
     .WithToolsFromAssembly();

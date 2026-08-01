@@ -1,19 +1,16 @@
 using ChatApp.Api.Auth;
-using ChatApp.Api.Options;
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
-using ChatApp.Application.Memory;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 
 namespace ChatApp.Api.Realtime;
 
 /// <summary>
 /// SignalR hub for realtime chat. <see cref="SendMessage"/>/<see cref="SendImage"/> dispatch through
-/// <see cref="ISender"/>, then fire the memory-update detached in a freshly opened DI scope — never
-/// awaited, so the hub method returns as soon as the send itself completes.
+/// <see cref="ISender"/>, then fire the memory update via <see cref="DetachedMemoryUpdateDispatcher"/> —
+/// never awaited, so the hub method returns as soon as the send itself completes.
 /// </summary>
 [Authorize]
 public sealed class ChatHub(
@@ -21,9 +18,7 @@ public sealed class ChatHub(
     ICurrentUserProvider currentUserProvider,
     IAppDbContext db,
     IUserConnectionTracker connectionTracker,
-    IServiceScopeFactory scopeFactory,
-    IOptions<ConversationMemoryOptions> memoryOptions,
-    ILogger<ChatHub> logger) : Hub
+    DetachedMemoryUpdateDispatcher memoryDispatcher) : Hub
 {
     /// <summary>Adds the connection to a Group per conversation the caller currently participates in.</summary>
     public override async Task OnConnectedAsync()
@@ -65,7 +60,7 @@ public sealed class ChatHub(
         var result = await sender.Send(new Application.Features.Messages.Send.Command(conversationId, text));
         ThrowIfFailed(result);
 
-        FireDetachedMemoryUpdate(conversationId, text);
+        memoryDispatcher.FireAndForget(conversationId, text);
     }
 
     /// <summary>Sends an image message; fires the detached memory update on success, counting the server-generated caption's tokens.</summary>
@@ -76,7 +71,7 @@ public sealed class ChatHub(
         var result = await sender.Send(new Application.Features.Messages.SendImage.Command(conversationId, imageUrl));
         ThrowIfFailed(result);
 
-        FireDetachedMemoryUpdate(conversationId, result.Value!.Caption ?? string.Empty);
+        memoryDispatcher.FireAndForget(conversationId, result.Value!.Caption ?? string.Empty);
     }
 
     private bool TryGetCallerId(out Guid userId)
@@ -88,30 +83,6 @@ public sealed class ChatHub(
 
         userId = default;
         return false;
-    }
-
-    /// <summary>
-    /// Runs <see cref="ConversationMemoryService.RecordMessageAndProcessAsync"/> as an un-awaited,
-    /// own-scoped background task — never the Hub invocation's own request-scoped services, which are
-    /// disposed as soon as this method returns.
-    /// </summary>
-    private void FireDetachedMemoryUpdate(Guid conversationId, string messageText)
-    {
-        var thresholdTokens = memoryOptions.Value.TokenThreshold;
-
-        _ = Task.Run(async () =>
-        {
-            using var scope = scopeFactory.CreateScope();
-            try
-            {
-                var memoryService = scope.ServiceProvider.GetRequiredService<ConversationMemoryService>();
-                await memoryService.RecordMessageAndProcessAsync(conversationId, messageText, thresholdTokens, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Detached memory update failed for conversation {ConversationId}", conversationId);
-            }
-        });
     }
 
     private static void ThrowIfFailed<T>(Result<T> result)

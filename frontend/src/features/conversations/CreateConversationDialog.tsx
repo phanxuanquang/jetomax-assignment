@@ -16,8 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { UsernameChipInput } from "@/components/UsernameChipInput";
-import { useSession } from "@/features/auth/SessionContext";
-import { useUsername } from "@/features/users/useUsername";
+import { useSigninUser } from "@/features/users/useSigninUser";
 import { createConversation } from "@/lib/api/conversations";
 import { getErrorMessage } from "@/lib/api/client";
 import { queryKeys } from "@/lib/query/keys";
@@ -29,8 +28,7 @@ export function CreateConversationDialog() {
   const [created, setCreated] = useState<Conversation | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { user } = useSession();
-  const { username: ownUsername } = useUsername(user?.id);
+  const { username: ownUsername } = useSigninUser();
 
   function handleUsernamesChange(next: string[]) {
     if (ownUsername && next.some((name) => name.toLowerCase() === ownUsername.toLowerCase())) {

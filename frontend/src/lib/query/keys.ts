@@ -8,4 +8,5 @@ export const queryKeys = {
   messageSearch: (conversationId: string, keyword: string) =>
     ["conversation", conversationId, "search", keyword] as const,
   user: (idOrUsername: string) => ["user", idOrUsername] as const,
+  signinUser: ["signinUser"] as const,
 };

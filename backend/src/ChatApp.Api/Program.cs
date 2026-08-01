@@ -48,6 +48,7 @@ builder.Services.AddScoped<ICurrentUserProvider, CurrentUserProvider>();
 builder.Services.AddScoped<IConversationAccess, ConversationAccess>();
 builder.Services.AddSingleton<IUserConnectionTracker, UserConnectionTracker>();
 builder.Services.AddScoped<IConversationNotifier, SignalRConversationNotifier>();
+builder.Services.AddSingleton<DetachedMemoryUpdateDispatcher>();
 
 builder.Services.AddSignalR()
     .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));

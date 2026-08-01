@@ -1,7 +1,6 @@
-using ChatApp.Api.Auth;
 using ChatApp.Api.DTOs;
 using ChatApp.Api.Extensions;
-using ChatApp.Domain.Enums;
+using ChatApp.Api.Realtime;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,16 +9,10 @@ using MessagesFeature = ChatApp.Application.Features.Messages;
 
 namespace ChatApp.Api.Controllers;
 
-/// <summary>
-/// Thin REST surface over the <c>Conversations</c>/<c>Messages</c> Application slices; every action
-/// just forwards to the matching command/query via <see cref="ISender"/>, no business logic here. Only
-/// <see cref="Summarize"/> carries <c>[AllowedRoles]</c>, since it's the sole action narrower than any
-/// authenticated role.
-/// </summary>
 [ApiController]
 [Route("api/conversations")]
 [Authorize]
-public sealed class ConversationsController(ISender sender) : ControllerBase
+public sealed class ConversationsController(ISender sender, DetachedMemoryUpdateDispatcher memoryDispatcher) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] string? q, CancellationToken cancellationToken = default)
@@ -63,6 +56,17 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
         return result.ToActionResult();
     }
 
+    [HttpPost("{id:guid}/messages")]
+    public async Task<IActionResult> SendMessage(Guid id, [FromBody] SendMessageRequest request, CancellationToken cancellationToken = default)
+    {
+        var result = await sender.Send(new MessagesFeature.Send.Command(id, request.Content), cancellationToken);
+        if (result.IsSuccess)
+        {
+            memoryDispatcher.FireAndForget(id, request.Content);
+        }
+        return result.ToActionResult();
+    }
+
     [HttpGet("{id:guid}/messages")]
     public async Task<IActionResult> GetMessages(Guid id, [FromQuery] Guid? before, [FromQuery] int limit = 50, CancellationToken cancellationToken = default)
     {
@@ -70,9 +74,9 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
         return result.ToActionResult();
     }
     [HttpGet("{id:guid}/messages/search")]
-    public async Task<IActionResult> SearchMessages(Guid id, [FromQuery] string? q, [FromQuery] int limit = 10, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> SearchMessages(Guid id, [FromQuery] string q, [FromQuery] int limit = 10, CancellationToken cancellationToken = default)
     {
-        var result = await sender.Send(new MessagesFeature.Search.Query(id, q ?? string.Empty, limit), cancellationToken);
+        var result = await sender.Send(new MessagesFeature.Search.Query(id, q, limit), cancellationToken);
         return result.ToActionResult();
     }
 

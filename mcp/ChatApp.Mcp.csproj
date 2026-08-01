@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove=".env.local" />
+    <None Remove=".env.local.example" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!--
       Pinned below 2.0.0 on purpose. 2.0.0 implements the 2026-07-28 protocol revision (per-request
       _meta instead of a stateful initialize handshake); as of this pin, ChatGPT's connector sends a

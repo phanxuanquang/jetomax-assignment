@@ -126,8 +126,8 @@ backend/src/
 │   │   ├── Conversations/   Create, Join, Leave, Rename, SetReadonly,
 │   │   │                    TransferOwnership, AddParticipants,
 │   │   │                    RemoveParticipants, Get
-│   │   ├── Messages/        Send, SendImage, Get
-│   │   ├── Users/           GetUserByIdOrUsername
+│   │   ├── Messages/        Send, SendImage, Get, Search
+│   │   ├── Users/           GetUserByIdOrUsername, GetSigninUserMeta
 │   │   └── Internal/        SummarizeConversation, GetAllConversations,
 │   │                         SummarizeConversations, PublishDigest, SetUserRole
 │   ├── Memory/        ConversationMemoryService — chunk + fold logic
@@ -329,6 +329,7 @@ Auth: the app carries a Supabase JWT; MCP and n8n carry a service key plus `X-On
 
 | Method | Path | Min role | Description |
 |---|---|---|---|
+| `GET` | `/api/users/me` | User | Resolve the caller's own identity (no input) to `{ id, username }` |
 | `GET` | `/api/users/{idOrUsername}` | User | Resolve a user by id or username, whichever the caller has, to `{ id, username }` |
 | `GET` | `/api/conversations?q=<term>` | User | List the caller's conversations; empty `q` returns all, otherwise filters by name |
 | `POST` | `/api/conversations` | User | Create a conversation with ≥1 other participant, by `username` |
@@ -336,10 +337,12 @@ Auth: the app carries a Supabase JWT; MCP and n8n carry a service key plus `X-On
 | `PATCH` | `/api/conversations/{id}/name` | User (owner) | Rename |
 | `PATCH` | `/api/conversations/{id}/readonly` | User (owner) | Set readonly |
 | `POST` | `/api/conversations/{id}/transfer` | User (owner) | Transfer ownership, by `username` |
+| `POST` | `/api/conversations/{id}/messages` | User | Send a text message; same effect as the Hub's `SendMessage` |
 | `GET` | `/api/conversations/{id}/messages?before=&limit=` | User | Paginated history, newest-first unless `before` is set |
+| `GET` | `/api/conversations/{id}/messages/search?q=&limit=` | User | Search this conversation's message text/captions, newest-first (`limit` ∈ [1, 10]) |
 | `POST` / `DELETE` | `/api/conversations/{id}/participants` | User (owner) | Add/remove a batch of participants, by `username`, all-or-nothing |
 | `POST` | `/api/conversations/{id}/leave` | User | Leave; owner must pass `mode: "delete" \| "freeze"` |
-| `POST` | `/api/conversations/{id}/summary` | Administrator, Moderator | On-demand summary |
+| `POST` | `/api/internal/{id}/summary` | Administrator, Moderator | On-demand summary |
 | `GET` | `/api/internal/conversations` | Administrator, Moderator | Every non-deleted conversation, regardless of membership |
 | `POST` | `/api/internal/summaries?hoursAgo=24` | Administrator, Moderator | One overall summary of activity in the given window |
 | `POST` | `/api/internal/digest` | Administrator, Moderator | Broadcast a digest (`DigestPublished`) — broadcast only, not persisted |
@@ -357,6 +360,9 @@ Auth: the app carries a Supabase JWT; MCP and n8n carry a service key plus `X-On
 
 // POST /api/conversations/join
 { "publicId": "Ab3Xy9" }
+
+// POST /api/conversations/{id}/messages
+{ "content": "hey, got a minute?" }
 
 // POST /api/internal/roles
 { "usernames": ["bob"], "role": "Moderator" }
