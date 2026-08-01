@@ -29,7 +29,7 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
             var before = await db.FirstOrDefaultAsync(db.Messages.Where(m => m.Id == beforeId && m.ConversationId == request.ConversationId), cancellationToken);
             if (before is null)
             {
-                return Result<IReadOnlyList<MessageDto>>.Failure(Error.NotFound("message.list.before_not_found", "The 'before' message was not found in this conversation."));
+                return Result<IReadOnlyList<MessageDto>>.Success([]);
             }
 
             query = query.Where(m => m.SentAt < before.SentAt);

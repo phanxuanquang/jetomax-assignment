@@ -1,6 +1,7 @@
 using ChatApp.Application.Abstractions;
 using ChatApp.Application.Common.Results;
 using ChatApp.Application.Memory;
+using ChatApp.Domain.Enums;
 using MediatR;
 
 namespace ChatApp.Application.Features.Internal.SummarizeConversation;
@@ -18,22 +19,22 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
     {
         var callerId = conversationAccess.UserId;
 
-        var isParticipant = await db.AnyAsync(
-            db.Participants.Where(p => p.ConversationId == request.ConversationId && p.UserId == callerId),
+        var isAdmin = await db.AnyAsync(
+            db.Users.Where(u => u.Id == callerId && u.Role == UserRole.Administrator),
             cancellationToken);
 
-        if (!isParticipant)
+        if (!isAdmin)
         {
-            return Result<string>.Failure(Error.Forbidden("conversation.summary.not_participant", "The caller is not a participant of this conversation."));
+            return Result<string>.Failure(Error.Forbidden("conversation.summary.not_admin", "The caller is not an administrator."));
         }
 
         var conversationExists = await db.AnyAsync(
-            db.Conversations.Where(c => c.Id == request.ConversationId && c.Messages.Any()),
+            db.Conversations.Where(c => c.Id == request.ConversationId),
             cancellationToken);
 
         if (!conversationExists)
         {
-            return Result<string>.Failure(Error.NotFound("conversation.not_found", "Conversation not found or does not have any messages yet."));
+            return Result<string>.Failure(Error.NotFound("conversation.not_found", "Conversation not found"));
         }
 
         var summary = await memoryService.GetOnDemandSummaryAsync(request.ConversationId, cancellationToken);

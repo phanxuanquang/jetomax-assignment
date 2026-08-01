@@ -385,3 +385,6 @@ agent/
 skills-lock.json
 
 node_modules/
+
+# Playwright (frontend)
+test-results/

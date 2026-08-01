@@ -28,7 +28,7 @@ public sealed class Handler(IAppDbContext db, ConversationMemoryService memorySe
 
         if (conversations.Count == 0)
         {
-            return Result<string>.Failure(Error.NotFound("conversation.not_found", $"No conversations active within the last {request.HoursAgo} hours."));
+            return Result<string>.Success($"No conversations active within the last {request.HoursAgo} hours.");
         }
 
         var threadSummaries = new List<(string DisplayName, string Summary)>();

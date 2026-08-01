@@ -96,12 +96,4 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
         var result = await sender.Send(new ConversationsFeature.Leave.Command(id, request.Mode), cancellationToken);
         return result.ToActionResult();
     }
-
-    [HttpPost("{id:guid}/summary")]
-    [AllowedRoles(UserRole.Administrator, UserRole.Moderator)]
-    public async Task<IActionResult> Summarize(Guid id, CancellationToken cancellationToken = default)
-    {
-        var result = await sender.Send(new ChatApp.Application.Features.Internal.SummarizeConversation.Query(id), cancellationToken);
-        return result.ToActionResult();
-    }
 }
