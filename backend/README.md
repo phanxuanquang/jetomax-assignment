@@ -110,8 +110,6 @@ dotnet build
 
 cd src/ChatApp.Api
 dotnet user-secrets init
-dotnet user-secrets set "Supabase:Url"                          "<Supabase API URL>"
-dotnet user-secrets set "SupabaseStorageOptions:Url"            "<Supabase API URL — same value, separate config section>"
 dotnet user-secrets set "SupabaseStorageOptions:ServiceRoleKey" "<service_role key>"
 dotnet user-secrets set "ConnectionStrings:Postgres"            "<Postgres connection string>"
 dotnet user-secrets set "GeminiConnectionOptions:ApiKey"        "<google ai studio key>"
@@ -123,7 +121,9 @@ dotnet run --project src/ChatApp.Api
 
 Full variable list and what each one means: [Environment variables reference](#environment-variables-reference) below.
 
-> **Two gotchas.** (1) `Supabase:Url` and `SupabaseStorageOptions:Url` are the *same* Supabase project URL, bound into two separate options classes (JWT validation vs. the storage client) — set both, or startup validation fails for whichever one is missing. (2) `ConnectionStrings:Postgres` is a *different* credential from `SupabaseStorageOptions:ServiceRoleKey` — `ServiceRoleKey` is a JWT used as a Bearer token for Supabase's REST APIs, while EF Core needs a real Postgres role and password via Npgsql (**Project Settings → Database → Connection string**, or `supabase status` locally). For a hosted project, use the **"Session Pooler"** connection string, not "Direct connection" — direct connections are IPv6-only on most hosted projects, and Transaction Pooler mode conflicts with Npgsql's default prepared-statement caching under EF Core.
+> **One gotcha.** `ConnectionStrings:Postgres` is a *different* credential from `SupabaseStorageOptions:ServiceRoleKey` — `ServiceRoleKey` is a JWT used as a Bearer token for Supabase's REST APIs, while EF Core needs a real Postgres role and password via Npgsql (**Project Settings → Database → Connection string**, or `supabase status` locally). For a hosted project, use the **"Session Pooler"** connection string, not "Direct connection" — direct connections are IPv6-only on most hosted projects, and Transaction Pooler mode conflicts with Npgsql's default prepared-statement caching under EF Core.
+>
+> If you're pointing at your own Supabase project rather than the demo one defaulted in `appsettings.json`, also set `Supabase:Url` and `SupabaseStorageOptions:Url` (same value, two config sections — see [Environment variables reference](#environment-variables-reference)).
 
 In `Development`, the API exposes a Scalar API reference (OpenAPI-based) for interactive exploration — check the console output for the exact URL on startup.
 
@@ -157,8 +157,8 @@ If all five pass, the environment is wired correctly.
 
 | Key | Meaning |
 |---|---|
-| `Supabase:Url` | Supabase API URL — used for JWT/JWKS validation |
-| `SupabaseStorageOptions:Url` | Same Supabase API URL, bound separately for the storage client |
+| `Supabase:Url` | Supabase API URL — used for JWT/JWKS validation. Already defaulted in `appsettings.json` to the demo project; only set to point at your own |
+| `SupabaseStorageOptions:Url` | Same Supabase API URL, bound separately for the storage client. Same default/override rule as `Supabase:Url` |
 | `SupabaseStorageOptions:ServiceRoleKey` | Service role key — must bypass RLS (see [docs/database-design.md](docs/database-design.md#row-level-security)) |
 | `ConnectionStrings:Postgres` | The actual Postgres connection string used by EF Core (not the same credential as `ServiceRoleKey`) |
 | `SupabaseStorageOptions:StorageBucket` | `images` — already defaulted in `appsettings.json` |
