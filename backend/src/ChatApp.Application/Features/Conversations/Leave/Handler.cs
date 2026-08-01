@@ -35,12 +35,7 @@ public sealed class Handler(IAppDbContext db, IConversationAccess conversationAc
 
         if (isOwner)
         {
-            if (request.Mode is not { } mode)
-            {
-                return Result.Failure(Error.Validation("conversation.leave.mode_required", "The owner must choose delete or freeze when leaving."));
-            }
-
-            if (mode == LeaveMode.Delete)
+            if (request.Mode == LeaveMode.Delete)
             {
                 var allParticipantIds = await db.ToListAsync(
                     db.Participants.Where(p => p.ConversationId == conversation.Id).Select(p => p.UserId),
