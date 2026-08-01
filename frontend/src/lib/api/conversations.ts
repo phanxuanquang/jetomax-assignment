@@ -91,11 +91,6 @@ export async function leaveConversation(
   await apiClient.post(`/api/conversations/${conversationId}/leave`, request);
 }
 
-export async function requestConversationSummary(conversationId: string): Promise<string> {
-  const { data } = await apiClient.post<string>(`/api/conversations/${conversationId}/summary`);
-  return data;
-}
-
 const DEFAULT_SEARCH_LIMIT = 10; // backend caps this at 10 regardless
 
 export async function searchMessages(

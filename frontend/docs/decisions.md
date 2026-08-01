@@ -4,7 +4,7 @@ Things that aren't obvious just from reading the code, and why they ended up thi
 
 ## State management: TanStack Query + Context, no Redux/Zustand
 
-Server state (conversations, messages, summary) needs caching, pagination, and invalidation — that's what TanStack Query is for, and realtime patches slot directly into its cache via `setQueryData`/`invalidateQueries`. The only client-only state left (current session, SignalR connection) is small enough that a second state library would be pure ceremony.
+Server state (conversations, messages, message search) needs caching, pagination, and invalidation — that's what TanStack Query is for, and realtime patches slot directly into its cache via `setQueryData`/`invalidateQueries`. The only client-only state left (current session, SignalR connection) is small enough that a second state library would be pure ceremony.
 
 ## PWA offline strategy: app-shell precache only
 
@@ -21,6 +21,10 @@ The `images` Storage bucket is private, so a public URL 403s for every viewer bu
 ## Dev target: localhost + LAN, no deploy config yet
 
 Current need is local-only, with other devices on the LAN reaching the frontend by IP. `vite.config.ts` sets `server.host: true` for that. Not addressed yet: a LAN device hitting the app via a plain-`http://` IP address gets a normal web page, not an installable PWA — service workers require `https://` or `localhost`. Also not addressed: the backend's CORS allowlist only has `http://localhost:5173` by default, so a LAN-IP origin needs to be added there too before cross-origin API calls from another device will succeed. Both are called out in the root README rather than silently worked around, since fixing them (a dev HTTPS cert, or a CORS entry) is an environment decision, not a frontend code change.
+
+## Conversation summary: built, then removed
+
+The original product brief had an on-demand AI summary feature (`POST /api/conversations/{id}/summary`, any member could call it), and it shipped in an early build. The backend later gated that endpoint to `[AllowedRoles(Administrator, Moderator)]` — no longer something every signed-in user can do — so it was pulled from the frontend entirely (`SummaryDialog`, the API call, its query key) rather than left as a feature that silently 403s for most users.
 
 ## Known follow-ups, not addressed
 

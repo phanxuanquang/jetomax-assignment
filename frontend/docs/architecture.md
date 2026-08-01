@@ -13,7 +13,6 @@ src/
     messages/       Message list (paginated + realtime), composer, image send/render
     realtime/       SignalR connection lifecycle + the functions that patch the
                     TanStack Query cache when a broadcast arrives
-    summary/        The one-off AI summary request/response dialog
     users/          userId -> username resolution (hook + cache + display component)
   components/
     ui/             shadcn/ui primitives — generated, don't hand-edit
@@ -34,7 +33,7 @@ src/
 
 ## State management
 
-**TanStack Query owns all server state** — conversations, paginated messages, the summary request. There is no separate client-side store duplicating what the API already knows; the query cache *is* the state.
+**TanStack Query owns all server state** — conversations, paginated messages, message search. There is no separate client-side store duplicating what the API already knows; the query cache *is* the state.
 
 **Realtime patches the same cache** instead of living in a parallel store. `features/realtime/HubProvider.tsx` opens one SignalR connection per signed-in session and, on each broadcast, calls into `features/realtime/cachePatchers.ts`:
 

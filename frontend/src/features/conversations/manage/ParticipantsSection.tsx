@@ -60,11 +60,11 @@ function ParticipantRow({
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onTransfer(username)}>
               <ShieldCheck className="size-4" />
-              Transfer ownership
+              Set as owner
             </DropdownMenuItem>
             <DropdownMenuItem variant="destructive" onClick={() => onRemove(username)}>
               <UserMinus className="size-4" />
-              Remove from conversation
+              Remove
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

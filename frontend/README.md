@@ -1,6 +1,6 @@
 # ChatApp Frontend
 
-Realtime chat PWA — sign in with Google, message 1:1 or in groups, send images (AI-captioned), request an AI summary of a conversation. React + Vite + TypeScript SPA that talks to the ASP.NET Core backend in `../backend/` over REST and SignalR.
+Realtime chat PWA — sign in with Google, message 1:1 or in groups, send images (AI-captioned). React + Vite + TypeScript SPA that talks to the ASP.NET Core backend in `../backend/` over REST and SignalR.
 
 Product requirements this was built from: [`../docs/software-requirements-specification.md`](../docs/software-requirements-specification.md). Architecture as actually built: [`docs/`](docs/).
 
@@ -11,11 +11,11 @@ Product requirements this was built from: [`../docs/software-requirements-specif
 - **Create / join** — create by username (2 participants = direct chat, more = group), or join an existing one by its 6-character `PublicId` code.
 - **Realtime messaging** — text and images, delivered live over SignalR to every online participant; history loads via paginated REST and a reconnect never loses or duplicates messages.
 - **Image messages** — uploaded straight from the browser to Supabase Storage (backend never sees the bytes); an AI caption attaches asynchronously and updates the message once ready.
-- **Conversation summary** — on-demand AI summary of everything sent so far.
+- **Message search** — find messages within a conversation by keyword, matching text content and image captions.
 - **Owner management** — rename, add/remove participants (batch, all-or-nothing), transfer ownership, toggle read-only, leave with an explicit delete-or-freeze choice (owner) or a plain leave (everyone else).
 - **Installable PWA** — manifest + service worker (app-shell precache), installable on `https://` or `localhost` origins.
 
-Explicitly not built (out of scope per the product brief): push notifications, end-to-end encryption, in-app message search, voice/video, multi-owner conversations, any role-aware UI.
+Explicitly not built (out of scope): push notifications, end-to-end encryption, voice/video, multi-owner conversations, any role-aware UI. Conversation summary was removed from the frontend once the backend gated it to Administrator/Moderator roles only — it's no longer a feature every signed-in user has.
 
 ## Tech stack
 
@@ -83,7 +83,7 @@ frontend/
 ├── src/
 │   ├── app/            Composition root — providers.tsx, routes.tsx
 │   ├── features/       One folder per feature: auth, conversations (+ manage/),
-│   │                    messages, realtime, summary, users
+│   │                    messages, realtime, users
 │   ├── components/     ui/ = shadcn primitives (generated); shared components elsewhere
 │   ├── lib/             api/, supabase/, signalr/, query/ — the non-React infrastructure layer
 │   ├── types/           TS interfaces mirroring the backend's data model

@@ -8,7 +8,6 @@ import { ParticipantsDialog } from "./ParticipantsDialog";
 import { MessageList } from "@/features/messages/MessageList";
 import { MessageComposer } from "@/features/messages/MessageComposer";
 import { MessageSearchDialog } from "@/features/messages/MessageSearchDialog";
-import { SummaryDialog } from "@/features/summary/SummaryDialog";
 import { ManageConversationSheet } from "./manage/ManageConversationSheet";
 import { LeaveSection } from "./manage/LeaveSection";
 
@@ -71,7 +70,6 @@ export function ConversationScreen() {
           )}
           <ParticipantsDialog conversation={conversation} />
           <MessageSearchDialog conversationId={conversation.id} />
-          <SummaryDialog conversationId={conversation.id} />
           {isOwner ? (
             <ManageConversationSheet conversation={conversation} />
           ) : (
