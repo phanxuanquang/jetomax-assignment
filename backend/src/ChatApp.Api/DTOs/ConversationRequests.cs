@@ -11,3 +11,4 @@ public sealed record SetReadonlyRequest(bool IsReadonly);
 public sealed record TransferOwnershipRequest(string NewOwnerUsername);
 public sealed record ParticipantsRequest(IReadOnlyCollection<string> Usernames);
 public sealed record LeaveConversationRequest(LeaveMode? Mode);
+public sealed record SendMessageRequest(string Content);
