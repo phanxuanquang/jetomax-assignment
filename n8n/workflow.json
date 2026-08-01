@@ -1,66 +1,6 @@
 {
-  "name": "ChatApp — Daily Digest (n8n)",
+  "name": "ChatApp Daily Digest",
   "nodes": [
-    {
-      "parameters": {
-        "content": "## Setup (do this once before activating)\n\n1. **Config node** (below): edit `baseUrl` to your ChatApp.Api URL (e.g. `https://your-backend.example.com`, no trailing slash), and `onBehalfOfUsername` to the username of an existing **Administrator**-role account (§4.2 — role-based auth: every backend call below now sends `X-On-Behalf-Of` with this username, not just the service key).\n2. **Credential — \"ChatApp N8n Key\"**: create an *HTTP Header Auth* credential named exactly `ChatApp N8n Key`, header name `X-Client-Key`, value = the `Clients:N8nKey` secret the backend owner gives you. Every HTTP Request node below already references it by name — open each once and pick it from the credential dropdown if it shows as unlinked after import.\n3. **Google Sheets node** (\"Append To Google Sheet\"): open it, connect your own Google Sheets credential, and pick/create a spreadsheet + sheet with header row: `Type | ConversationId | DisplayName | Summary | GeneratedAt`.\n4. **Schedule Trigger**: change the time if you don't want the default (daily at 00:00).\n5. **Webhook (bottom-left)**: this is the \"web page\" — see the design note near it. If n8n is self-hosted with no public URL, use n8n's built-in tunnel or a reverse proxy so the webhook URL is reachable.\n\nReference docs this workflow was built from: `mcp-n8n-api-reference.md` (auth model, DTOs, endpoint table) + `openapi.json` (exact request shapes).",
-        "height": 332,
-        "width": 1140
-      },
-      "id": "200cfa35-c750-41d9-9cb0-02979cf97e5e",
-      "name": "Setup — read me first",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -608,
-        -144
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## Why a Webhook node is \"the web page\"\n\n`mcp-n8n-api-reference.md` §6 is explicit: `POST /api/internal/digest` only **broadcasts** the digest (SignalR `DigestPublished`) — the backend does **not** store or serve it back. The workflow itself must own publishing/persisting it somewhere viewable.\n\nThis workflow uses n8n's own **Webhook (GET) + workflow static data** as that \"somewhere\" — zero extra hosting, zero extra signups. The Schedule branch stores the latest digest HTML via `$getWorkflowStaticData('global')`; the Webhook branch reads it back and renders it. The Webhook's public URL *is* the web page.\n\n**Alternative** if you need a persistent URL independent of this n8n instance's uptime: swap the last 3 nodes for a GitHub node committing `digest.html` to a GitHub Pages repo, or an HTTP Request to any static-file host. Not done here to avoid an extra credential for a take-home.",
-        "height": 360,
-        "width": 740
-      },
-      "id": "152f063d-9408-412a-bfef-c9e1734b11c6",
-      "name": "Design note — the web page",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1760,
-        944
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## If a Merge node's mode looks wrong after import\n\nn8n occasionally renames Merge-node dropdown options between versions.\n\n- **Merge Branches** should combine **1 item + 1 item by position** into one item (per-thread summaries + the 24h roll-up).\n- **Merge For Sheet** should just **append/concatenate** two lists of items into one longer list (thread rows + the overall row).\n\nIf either shows a different mode after import, open the node and pick the option matching the description above — the rest of the workflow doesn't care how the mode is labeled, only that the *result* matches.",
-        "height": 260,
-        "width": 380
-      },
-      "id": "edb4e055-7562-49f3-84c7-a322a7485379",
-      "name": "Merge node note",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        1040,
-        1280
-      ]
-    },
-    {
-      "parameters": {
-        "content": "## One thread's AI failure must not break the whole digest\n\n\"Summarize Thread\" and \"Get 24h Rollup\" both have **Continue On Fail** enabled. If Gemini hiccups for one conversation (rate limit, timeout), the next Code node substitutes a placeholder string instead of the run aborting — mirroring the backend's own \"AI failure never blocks\" rule (F-5) at the workflow level.\n\nThis also absorbs a real access-control gap: `POST /api/conversations/{id}/summary` only allows a caller who is a **participant** of that conversation. `GET /api/internal/conversations` lists every conversation, regardless of membership. If the `onBehalfOfUsername` Administrator is not a participant of some thread, that thread's summary call gets 403 and falls back to the placeholder — not a bug, just something to know if placeholders show up often.",
-        "height": 156,
-        "width": 716
-      },
-      "id": "11fa5780-e3a6-4c12-80b5-800c258c94b8",
-      "name": "Resilience note",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        -864,
-        624
-      ]
-    },
     {
       "parameters": {
         "rule": {
@@ -72,13 +12,13 @@
           ]
         }
       },
-      "id": "c81b25ad-2aa5-40a4-96ec-0fb634f41e86",
+      "id": "d8994bbd-c6c1-43f2-885a-72b73dbd3d3e",
       "name": "Schedule: Daily Digest",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -432,
-        416
+        176,
+        560
       ]
     },
     {
@@ -89,7 +29,7 @@
               "id": "3a8b28e6-52d7-4bcf-a9de-2ed033c9c34e",
               "name": "baseUrl",
               "type": "string",
-              "value": "https://YOUR-CHATAPP-HOST"
+              "value": "http://localhost:5000"
             },
             {
               "id": "fc76017d-9ce5-4c70-a3d1-778654123fe0",
@@ -101,19 +41,19 @@
               "id": "a4d0f8b1-5e2c-4a7d-9c1f-6b8e2d5f0a3c",
               "name": "onBehalfOfUsername",
               "type": "string",
-              "value": "YOUR-ADMIN-USERNAME"
+              "value": "bobtest"
             }
           ]
         },
         "options": {}
       },
-      "id": "932a1f00-1907-4ead-900c-ef1a357770b9",
+      "id": "aed607f5-618f-45af-8e0b-2fdca6fdad60",
       "name": "Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -176,
-        416
+        432,
+        560
       ]
     },
     {
@@ -132,25 +72,25 @@
         },
         "options": {}
       },
-      "id": "28c2c43d-471d-49a9-b14f-0bd9e2f59097",
+      "id": "99a04eb7-c081-45d1-bff7-bf76bfc17ef7",
       "name": "Get All Conversations",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        96,
-        304
+        704,
+        448
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "PLACEHOLDER-SELECT-ON-IMPORT",
-          "name": "ChatApp N8n Key"
+          "id": "uQXYDRG13kl8syPD",
+          "name": "Header Auth account"
         }
       }
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Config').item.json.baseUrl }}/api/conversations/{{ $json.conversationId }}/summary",
+        "url": "={{ $('Config').item.json.baseUrl }}/api/internal/{{ $json.conversationId }}/summary",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
@@ -176,18 +116,18 @@
           }
         }
       },
-      "id": "6586124e-ee7b-49ee-93b1-2abaaf2e6dc3",
+      "id": "23fd93a7-315e-46fb-8399-401775dc4a8b",
       "name": "Summarize Thread",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        352,
-        304
+        960,
+        448
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "PLACEHOLDER-SELECT-ON-IMPORT",
-          "name": "ChatApp N8n Key"
+          "id": "uQXYDRG13kl8syPD",
+          "name": "Header Auth account"
         }
       }
     },
@@ -195,13 +135,13 @@
       "parameters": {
         "jsCode": "// Each item here corresponds 1:1 to the same-index item from \"Get All Conversations\" (n8n item-linking), so we can read the\n// original conversationId/displayName back via $('...').item.\nconst source = $('Get All Conversations').item.json;\nlet summary = null;\ntry {\n  const raw = $json.data !== undefined ? $json.data : $json;\n  summary = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (e) {\n  summary = null;\n}\nif (!summary || typeof summary !== 'string') {\n  summary = '[Summary unavailable for this thread — the AI call failed or returned an unexpected shape.]';\n}\nreturn { json: {\n  conversationId: source.conversationId,\n  displayName: source.displayName,\n  summary,\n} };"
       },
-      "id": "73b6d882-84f5-4932-a7c8-fb9be34b410f",
+      "id": "7d883587-4c96-4af9-ada6-41d049bffab2",
       "name": "Parse Thread Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        592,
-        304
+        1200,
+        448
       ]
     },
     {
@@ -242,26 +182,26 @@
         },
         "options": {}
       },
-      "id": "8e1e03d0-df08-4675-8ff3-a262fce3b942",
+      "id": "b8c9cf16-0d04-4761-aff0-8fcbf8990c2e",
       "name": "Tag Thread Rows",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        832,
-        224
+        1440,
+        368
       ]
     },
     {
       "parameters": {
         "jsCode": "// Run once for all items: collapse every per-thread summary into a\n// single array on one item, so it can be combined with the 24h roll-up.\nreturn [{ json: { threadSummaries: items.map(i => i.json) } }];"
       },
-      "id": "45f14bb1-7b3e-476a-9028-a0b75936d170",
+      "id": "5301d039-c78a-46ec-b01e-7af570b9ebff",
       "name": "Aggregate Thread Summaries",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        832,
-        432
+        1440,
+        576
       ]
     },
     {
@@ -296,18 +236,18 @@
           }
         }
       },
-      "id": "16d37d2e-adbd-4125-9166-3e7e34a70591",
+      "id": "dae188b7-f57b-4713-8a97-3b16939c06b5",
       "name": "Get 24h Rollup",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        96,
-        640
+        704,
+        784
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "PLACEHOLDER-SELECT-ON-IMPORT",
-          "name": "ChatApp N8n Key"
+          "id": "uQXYDRG13kl8syPD",
+          "name": "Header Auth account"
         }
       }
     },
@@ -315,13 +255,13 @@
       "parameters": {
         "jsCode": "let overallSummary = null;\ntry {\n  const raw = $json.data !== undefined ? $json.data : $json;\n  overallSummary = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (e) {\n  overallSummary = null;\n}\nif (!overallSummary || typeof overallSummary !== 'string') {\n  overallSummary = '[Overall 24h summary unavailable — the roll-up call failed.]';\n}\nreturn { json: { overallSummary } };"
       },
-      "id": "0ca2402d-e8a0-4d75-87b3-e32271310759",
+      "id": "5f759018-2d09-488a-ab71-83dba60bdc68",
       "name": "Parse Rollup",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        352,
-        640
+        960,
+        784
       ]
     },
     {
@@ -329,26 +269,26 @@
         "mode": "combine",
         "options": {}
       },
-      "id": "664211e8-6f87-4793-a7f8-d721f969f6c4",
+      "id": "1f3f4810-d8f4-4011-8861-5d77c8bbc5e8",
       "name": "Merge Branches",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        1120,
-        432
+        1728,
+        576
       ]
     },
     {
       "parameters": {
         "jsCode": "const threadSummaries = $json.threadSummaries || [];\nconst overallSummary = $json.overallSummary || '';\nconst publishedAt = new Date().toISOString();\n\nconst lines = threadSummaries.map(t =>\n  `- ${t.displayName} (${t.conversationId}): ${t.summary}`\n).join('\\n');\nconst digestText = `Daily digest — ${publishedAt}\\n\\nOverall (last 24h):\\n${overallSummary}\\n\\nPer-conversation summaries:\\n${lines || '(no active conversations)'}`;\n\nconst escapeHtml = (s) => String(s ?? '')\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst rowsHtml = threadSummaries.map(t => `\n  <li><strong>${escapeHtml(t.displayName)}</strong> (${escapeHtml(t.conversationId)})<br>${escapeHtml(t.summary)}</li>`\n).join('');\nconst digestHtml = `<!DOCTYPE html><html><head><meta charset=\"utf-8\">\n<title>ChatApp Daily Digest</title>\n<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.5}\nh1{font-size:1.4rem}h2{font-size:1.1rem;margin-top:2rem}li{margin-bottom:1rem}</style>\n</head><body>\n<h1>ChatApp Daily Digest</h1>\n<p><em>Generated ${escapeHtml(publishedAt)}</em></p>\n<h2>Overall (last 24h)</h2><p>${escapeHtml(overallSummary)}</p>\n<h2>Per-conversation summaries</h2><ul>${rowsHtml || '<li>(no active conversations)</li>'}</ul>\n</body></html>`;\n\nreturn { json: { digestText, digestHtml, publishedAt, threadSummaries, overallSummary } };"
       },
-      "id": "3e68db86-27d4-40ea-a6b3-28cf24c59168",
+      "id": "aef69e1b-1f39-44a3-bb38-d3cd0561ece9",
       "name": "Build Digest",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1360,
-        432
+        1968,
+        576
       ]
     },
     {
@@ -357,9 +297,6 @@
         "url": "={{ $('Config').item.json.baseUrl }}/api/internal/digest",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ digest: $json.digestText, publishedAt: $json.publishedAt }) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -369,20 +306,23 @@
             }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ digest: $json.digestText, publishedAt: $json.publishedAt }) }}",
         "options": {}
       },
-      "id": "16246d4e-3319-4cb2-ac5c-aa6c793030c2",
+      "id": "fef9feb8-c3d8-4aeb-87f9-e9fcfa0e7de7",
       "name": "Publish Digest To Backend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1600,
-        432
+        2208,
+        576
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "PLACEHOLDER-SELECT-ON-IMPORT",
-          "name": "ChatApp N8n Key"
+          "id": "uQXYDRG13kl8syPD",
+          "name": "Header Auth account"
         }
       }
     },
@@ -390,13 +330,13 @@
       "parameters": {
         "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.lastDigest = {\n  html: $json.digestHtml,\n  publishedAt: $json.publishedAt,\n};\nreturn { json: $json };"
       },
-      "id": "30c1cc8c-9c82-427a-a2b4-61c0fec927c8",
+      "id": "a2e2426b-9ffa-495e-b5bd-00dde4f2005d",
       "name": "Store Digest For Web Page",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1840,
-        432
+        2448,
+        576
       ]
     },
     {
@@ -437,24 +377,24 @@
         },
         "options": {}
       },
-      "id": "db62c24b-613e-420d-bf5a-ee0d7730f241",
+      "id": "ccfd9423-b2e0-473e-b071-448e74e2eaa1",
       "name": "Tag Overall Row",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        2064,
-        432
+        2672,
+        576
       ]
     },
     {
       "parameters": {},
-      "id": "49262e55-5a37-4c77-b909-35bb73ed528c",
+      "id": "c4c8b718-1ba0-4999-b232-8dbe6100488a",
       "name": "Merge For Sheet",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        2288,
-        240
+        2896,
+        384
       ]
     },
     {
@@ -471,7 +411,7 @@
           "__rl": true,
           "value": "gid=0",
           "mode": "list",
-          "cachedResultName": "Trang tính1",
+          "cachedResultName": "Sheet1",
           "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ZuM2YlRZcIh0m6rL0Zm6aeDafOsY4UregFlrceumRUI/edit#gid=0"
         },
         "columns": {
@@ -531,18 +471,18 @@
         },
         "options": {}
       },
-      "id": "851a4645-e810-4d67-bf81-6309994ad0f9",
+      "id": "b02bc2b4-5190-4a6c-a8ba-5c9386e6ef4f",
       "name": "Append To Google Sheet",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4.5,
       "position": [
-        2496,
-        240
+        3104,
+        384
       ],
       "executeOnce": false,
       "credentials": {
         "googleSheetsOAuth2Api": {
-          "id": "Lu6J48u0GTGsNUZm",
+          "id": "YGuzEMtmyxFKjPHY",
           "name": "Google Sheets account"
         }
       }
@@ -553,13 +493,13 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "6f75ba0b-1632-477b-8036-7a82644af50b",
+      "id": "4e27a411-7153-4e5a-96db-1f3f537cddbc",
       "name": "Webhook: Digest Page",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -432,
-        992
+        176,
+        1136
       ],
       "webhookId": "ba953d10-e895-4f37-b5f6-420a7cd2271a"
     },
@@ -567,13 +507,13 @@
       "parameters": {
         "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst last = staticData.lastDigest;\nconst html = last\n  ? last.html\n  : '<!DOCTYPE html><html><body style=\"font-family:sans-serif;max-width:640px;margin:3rem auto\"><h1>ChatApp Daily Digest</h1><p>No digest has been published yet. The schedule runs daily at 00:00, or trigger the \"Schedule: Daily Digest\" node manually.</p></body></html>';\nreturn { json: { html } };"
       },
-      "id": "90a7d8a9-1167-45ac-b70c-59224df9b320",
+      "id": "a1ebab95-325a-4436-8247-7d6751a435ab",
       "name": "Render Digest Page",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -176,
-        992
+        432,
+        1136
       ]
     },
     {
@@ -591,13 +531,13 @@
           }
         }
       },
-      "id": "1eedcbc3-ede7-4e17-8c91-1b2c3c9f55fe",
+      "id": "ed41601d-17a7-4518-abdb-1124b01d1e65",
       "name": "Respond With HTML",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        96,
-        992
+        704,
+        1136
       ]
     }
   ],
@@ -807,12 +747,12 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "85ff27be-c316-4a53-a2b9-d772668a9436",
+  "versionId": "d1ee359c-965c-41a6-8da4-d0f0e2763136",
   "meta": {
     "templateCredsSetupCompleted": true,
-    "instanceId": "93ec3aa5adad2d88fbb149db8822bca7f15d32fed681a21f80a1016e7df14368"
+    "instanceId": "8e6322dcc914bd0d17ba5c36667193f6479c486ce88f12aaaa857319ed4cdad9"
   },
   "nodeGroups": [],
-  "id": "GqetXJOvsId77drm",
+  "id": "N5dcr6XfCt1hUAZY",
   "tags": []
 }
