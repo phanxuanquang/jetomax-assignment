@@ -95,3 +95,17 @@ export async function requestConversationSummary(conversationId: string): Promis
   const { data } = await apiClient.post<string>(`/api/conversations/${conversationId}/summary`);
   return data;
 }
+
+const DEFAULT_SEARCH_LIMIT = 10; // backend caps this at 10 regardless
+
+export async function searchMessages(
+  conversationId: string,
+  keyword: string,
+  limit: number = DEFAULT_SEARCH_LIMIT,
+): Promise<Message[]> {
+  const { data } = await apiClient.get<Message[]>(
+    `/api/conversations/${conversationId}/messages/search`,
+    { params: { q: keyword, limit } },
+  );
+  return data;
+}

@@ -6,5 +6,7 @@ export const queryKeys = {
   // realtime cache patches never accidentally touch the wrong query's data.
   messages: (conversationId: string) => ["conversation", conversationId, "messages"] as const,
   summary: (conversationId: string) => ["conversation", conversationId, "summary"] as const,
+  messageSearch: (conversationId: string, keyword: string) =>
+    ["conversation", conversationId, "search", keyword] as const,
   user: (idOrUsername: string) => ["user", idOrUsername] as const,
 };

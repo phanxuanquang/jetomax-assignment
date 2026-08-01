@@ -75,6 +75,10 @@ Storing the path instead of a pre-signed URL is deliberate: a signed URL baked i
 
 `features/messages/useMessages.ts` uses `useInfiniteQuery`. Each page comes back newest-first (per the API); the *pages* themselves are also newest-first (page 0 = newest chunk). `flattenMessagePages` reverses both the page order and each page's contents to produce a single oldest-to-newest array for rendering. `MessageList.tsx` uses an `IntersectionObserver` on a sentinel above the oldest loaded message to trigger `fetchNextPage()`, and preserves scroll position across that load (compensating for the new content's height) rather than letting the view jump.
 
+## Message search
+
+`GET /api/conversations/{id}/messages/search?q=&limit=` (member-gated, added mid-build to close the original "no search" scope gap) matches text content and image captions via a case-insensitive `ILIKE`, capped at 10 results server-side. `features/messages/MessageSearchDialog.tsx` is a simple on-demand results list (debounced query, click nothing further — no "jump to this message in the live scrollback," which would need paging through history until reaching it) rather than inline highlighting in the message list itself.
+
 ## PWA
 
 `vite-plugin-pwa` with `registerType: 'autoUpdate'` — an app-shell precache only (static assets, install prompt), no offline data/message queue. A realtime chat has a real correctness cost to queuing sends made while offline (duplicate/out-of-order risk); the acceptance bar in [`../../docs/software-requirements-specification.md` §F-3](../../docs/software-requirements-specification.md#f-3--real-time-messaging) cares about a reconnect never losing or duplicating messages, which the realtime + query-invalidation design already covers for online reconnects. Offline compose was scoped out rather than half-built.
