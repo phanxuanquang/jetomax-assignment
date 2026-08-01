@@ -69,6 +69,12 @@ public sealed class ConversationsController(ISender sender) : ControllerBase
         var result = await sender.Send(new MessagesFeature.Get.Query(id, before, limit), cancellationToken);
         return result.ToActionResult();
     }
+    [HttpGet("{id:guid}/messages/search")]
+    public async Task<IActionResult> SearchMessages(Guid id, [FromQuery] string? q, [FromQuery] int limit = 10, CancellationToken cancellationToken = default)
+    {
+        var result = await sender.Send(new MessagesFeature.Search.Query(id, q ?? string.Empty, limit), cancellationToken);
+        return result.ToActionResult();
+    }
 
     [HttpPost("{id:guid}/participants")]
     public async Task<IActionResult> AddParticipants(Guid id, [FromBody] ParticipantsRequest request, CancellationToken cancellationToken = default)
