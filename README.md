@@ -1,27 +1,26 @@
-# ChatApp
-
+# Jetomax Assignment
 Realtime chat PWA: sign in with Google, message 1:1 or in groups, send AI-captioned images, and request an AI summary of a conversation. Includes an MCP server so ChatGPT/Claude can operate on conversations, and an n8n workflow that publishes a scheduled daily digest.
 
 ```mermaid
 flowchart LR
-    FE["Frontend<br/>React PWA"] <-->|REST + SignalR + JWT| BE["Backend<br/>ASP.NET Core (.NET 10)"]
-    FE -->|sign in, image upload| SB[("Supabase<br/>Auth · Storage · Postgres")]
+    FE["PWA"] <-->|REST + SignalR + JWT| BE["Backend Server"]
+    FE -->|sign in, image upload| SB[("Supabase")]
     BE --> SB
-    BE --> GEM["Gemini<br/>(captions, summaries)"]
+    BE --> GEM["LLM Service"]
     MCP["MCP server"] -->|REST + service key| BE
-    N8N["n8n workflow"] -->|REST + service key| BE
-    MCP -.->|OAuth| GPT["ChatGPT / Claude"]
+    N8N["n8n"] -->|REST + service key| BE
+    MCP -.->|OAuth| GPT["LLM Platform"]
 ```
 
 ## Repository layout
 
 | Folder | What it is | Setup |
 |---|---|---|
-| [`backend/`](backend/) | ASP.NET Core (.NET 10) REST + SignalR API — Clean Architecture, EF Core, Semantic Kernel/Gemini | [`backend/README.md`](backend/README.md) |
-| [`frontend/`](frontend/) | React + Vite + TypeScript PWA | [`frontend/README.md`](frontend/README.md) |
-| [`mcp/`](mcp/) | MCP server — thin protocol adapter exposing 4 tools to ChatGPT/Claude | [`mcp/README.md`](mcp/README.md) |
-| [`n8n/`](n8n/) | n8n workflow — daily digest job | [`n8n/README.md`](n8n/README.md) |
-| [`docs/`](docs/) | Product requirements (SRS) — the only doc that lives outside a project folder | see [Documentation](#documentation) below |
+| [`backend/`](backend/) | ASP.NET Core (.NET 10) REST + SignalR API — Clean Architecture, EF Core, Semantic Kernel | [`backend/README.md`](backend/README.md) |
+| [`frontend/`](frontend/) | PWA | [`frontend/README.md`](frontend/README.md) |
+| [`mcp/`](mcp/) | MCP server | [`mcp/README.md`](mcp/README.md) |
+| [`n8n/`](n8n/) | n8n workflow | [`n8n/README.md`](n8n/README.md) |
+| [`docs/`](docs/) | Product requirements (SRS) | see [Documentation](#documentation) below |
 
 Backend architecture, database design, and the schema live in [`backend/docs/`](backend/docs/) since they're backend-specific; MCP/n8n design details are folded into their own project READMEs.
 
@@ -72,7 +71,3 @@ This detects the machine's LAN IPv4, binds the backend to every network interfac
 | [frontend/docs/decisions.md](frontend/docs/decisions.md) | Why the frontend made the non-obvious choices it made |
 
 Start with the SRS for *what* the app does, the backend architecture doc for *how* the backend is built, and the per-project READMEs for *how to run* each piece.
-
-## Troubleshooting
-
-Most day-to-day issues (CORS, auth, image loading, SignalR) are frontend-visible first — see [frontend/README.md § Troubleshooting](frontend/README.md#troubleshooting). Backend-side gotchas (Supabase/schema setup, Postgres pooler mode) are in [backend/README.md](backend/README.md#first-time-setup), and RLS/security caveats are in [backend/docs/backend-system-design-and-architecture.md § Security notes](backend/docs/backend-system-design-and-architecture.md#11-security-notes).
