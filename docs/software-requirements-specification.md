@@ -1,6 +1,6 @@
 # Software Requirements Specification — Realtime Chat App
 
-The authoritative requirements: what the product must do, and how each requirement is verified. Technical design is in [backend-system-design-and-architecture.md](backend-system-design-and-architecture.md); the data model is in [database-design.md](database-design.md).
+The authoritative requirements: what the product must do, and how each requirement is verified. Technical design is in [backend-system-design-and-architecture.md](../backend/docs/backend-system-design-and-architecture.md); the data model is in [database-design.md](../backend/docs/database-design.md).
 
 ---
 
@@ -33,7 +33,7 @@ Push notifications, end-to-end encryption, in-app message search, voice/video, m
 
 ### 2.1 Product perspective
 
-One responsive PWA, not three native apps — a single codebase that runs in a desktop browser and installs to a mobile home screen. The backend is a thin logic plane; Supabase owns identity, files, and the database (see [architecture §1](backend-system-design-and-architecture.md#1-guiding-principles)).
+One responsive PWA, not three native apps — a single codebase that runs in a desktop browser and installs to a mobile home screen. The backend is a thin logic plane; Supabase owns identity, files, and the database (see [architecture §1](../backend/docs/backend-system-design-and-architecture.md#1-guiding-principles)).
 
 ### 2.2 Actors
 
@@ -104,7 +104,7 @@ flowchart LR
 
 ### F-2 · Roles & authorization
 
-**Behavior.** Every user has exactly one `UserRole`. It — not which client made the call — decides what a request may do; see [architecture §6](backend-system-design-and-architecture.md#6-authentication--authorization) for the full matrix. MCP and n8n calls always act on behalf of a specific real user, never anonymously.
+**Behavior.** Every user has exactly one `UserRole`. It — not which client made the call — decides what a request may do; see [architecture §6](../backend/docs/backend-system-design-and-architecture.md#6-authentication--authorization) for the full matrix. MCP and n8n calls always act on behalf of a specific real user, never anonymously.
 
 **Acceptance.** A `User`-role account can use every ordinary chat feature; only `Administrator`/`Moderator` can reach the system-wide operations that power the n8n digest; only `Administrator` can change a user's role.
 
@@ -156,7 +156,7 @@ flowchart TD
 
 ### F-7 · Conversation summarization
 
-**Behavior.** The system maintains a rolling background summary per conversation (see [architecture §8](backend-system-design-and-architecture.md#8-conversation-memory-pipeline)), so a summary is cheap to produce on demand. One endpoint serves three callers: the in-app "Summarize" action, the MCP `get_conversation_summarization` tool, and the n8n daily digest.
+**Behavior.** The system maintains a rolling background summary per conversation (see [architecture §8](../backend/docs/backend-system-design-and-architecture.md#8-conversation-memory-pipeline)), so a summary is cheap to produce on demand. One endpoint serves three callers: the in-app "Summarize" action, the MCP `get_conversation_summarization` tool, and the n8n daily digest.
 
 **Acceptance.** Summarization never blocks message sending; an on-demand summary reflects everything up to the request moment; ChatGPT obtains the same summary via MCP as the in-app action does.
 
@@ -202,13 +202,13 @@ A remote MCP server (`/mcp`, HTTPS, OAuth-protected) is added to ChatGPT via Dev
 | Summarize a selected thread | `get_conversation_summarization` |
 | Join a group chat | `join_conversation` |
 
-**Acceptance.** The `/mcp` URL can be added as a connector; ChatGPT can list conversations, read/summarize a thread, and join a group. Full design: [mcp-integration.md](mcp-integration.md).
+**Acceptance.** The `/mcp` URL can be added as a connector; ChatGPT can list conversations, read/summarize a thread, and join a group. Full design: [mcp/README.md](../mcp/README.md).
 
 ### 6.2 n8n daily digest
 
 A daily workflow retrieves all conversations, summarizes each, produces one overall 24-hour summary, publishes it to a web page, and appends rows to a Google Sheet.
 
-**Acceptance.** On schedule, per-conversation and one overall summary are produced and published to both the web page and the sheet. Full design: [n8n-workflow.md](n8n-workflow.md).
+**Acceptance.** On schedule, per-conversation and one overall summary are produced and published to both the web page and the sheet. Full design: [n8n/README.md](../n8n/README.md).
 
 ---
 
@@ -228,7 +228,7 @@ A daily workflow retrieves all conversations, summarizes each, produces one over
 | Requirement | Fulfilled by | Verified by |
 |---|---|---|
 | F-1 Sign-in | Supabase Auth (Google OAuth) + `handle_new_user` trigger | New account gets a valid profile with no sign-up step |
-| F-2 Roles | `UserRole` + `[AllowedRoles]` | Access matrix in [architecture §6](backend-system-design-and-architecture.md#6-authentication--authorization) |
+| F-2 Roles | `UserRole` + `[AllowedRoles]` | Access matrix in [architecture §6](../backend/docs/backend-system-design-and-architecture.md#6-authentication--authorization) |
 | F-3 Messaging | SignalR `ChatHub` | Realtime delivery + REST history pagination |
 | F-4 Create/join | `POST /api/conversations`, `POST /api/conversations/join` | Create-then-chat, join-then-see-history |
 | F-5 Ownership | Owner-only handler checks | Non-owner actions rejected server-side |

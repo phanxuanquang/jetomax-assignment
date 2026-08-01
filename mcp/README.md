@@ -1,4 +1,4 @@
-Thin [MCP](https://modelcontextprotocol.io/) server for ChatGPT/Claude to operate on ChatApp conversations. No business logic — every tool call maps 1:1 to a ChatApp REST call. Design doc: [../docs/mcp-integration.md](../docs/mcp-integration.md).
+Thin [MCP](https://modelcontextprotocol.io/) server for ChatGPT/Claude to operate on ChatApp conversations. It's a **separate deployable** — no business logic, no direct database access; every tool call maps 1:1 to a ChatApp REST call, so all business rules stay in the backend and this server is just a protocol adapter.
 
 ## How it works
 
@@ -33,14 +33,27 @@ mcp/
 
 ## Tools
 
-| Tool | Backend call | Read-only |
-|---|---|---|
-| `list_joined_conversations` | `GET /api/conversations?q=` | yes |
-| `fetch_conversation_messages` | `GET /api/conversations/{id}/messages` | yes |
-| `get_conversation_summarization` | `POST /api/conversations/{id}/summary` | yes |
-| `join_conversation` | `POST /api/conversations/join` | no |
+| Tool | Input | Backend call | Read-only |
+|---|---|---|---|
+| `list_joined_conversations` | `query` | `GET /api/conversations?q=<query>` | yes |
+| `fetch_conversation_messages` | `conversationId`, `beforeMessageId?`, `limit?` | `GET /api/conversations/{id}/messages` | yes |
+| `get_conversation_summarization` | `conversationId` | `POST /api/conversations/{id}/summary` | yes |
+| `join_conversation` | `publicId` | `POST /api/conversations/join` | no |
 
-No `search`/`fetch` pair — ChatGPT's non-Developer-Mode default connector needs those two names specifically; without them this only works via Developer Mode's custom tools.
+No `search`/`fetch` pair — ChatGPT's non-Developer-Mode default connector needs those two names specifically; without them this only works via Developer Mode's custom tools (see [Connecting a client](#connecting-a-client)).
+
+## Auth model
+
+Two separate authentication concerns, not one:
+
+1. **MCP server → backend**: always as **one fixed, configured account** — there is no per-caller mapping. Every tool call sends:
+   ```
+   X-Client-Key: <Clients:McpKey value>
+   X-On-Behalf-Of: <the one configured backend username>
+   ```
+   The backend resolves that user and applies the exact same membership, ownership, and role-based rules ([backend architecture §6](../backend/docs/backend-system-design-and-architecture.md#6-authentication--authorization)) it would for that user calling directly.
+
+2. **ChatGPT/Claude → MCP server**: real OAuth, since both platforms require it for remote MCP connectors. The MCP server doesn't issue tokens itself — it validates access tokens issued by [Auth0](https://auth0.com/) (a hosted authorization server) against a configured audience, publishing the standard [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery document so ChatGPT/Claude can find Auth0 automatically. A valid token only proves "this client completed Auth0 login" — it does not change which backend account gets used, since that's still the one fixed account from step 1.
 
 ## Setup
 
@@ -55,6 +68,10 @@ No `search`/`fetch` pair — ChatGPT's non-Developer-Mode default connector need
 | Promote that connection | Same connection → **Applications** tab → banner link → **promote to domain level** |
 
 **2. Secrets:**
+
+**Shortcut:** `Copy-Item .env.local.example .env.local`, fill in the real values, then `./start-dev.ps1` — it applies them via `dotnet user-secrets` and runs the server.
+
+Or manually:
 
 ```bash
 cd mcp
@@ -80,17 +97,21 @@ ngrok's free URL changes every restart — update the connector URL each time, o
 
 | | ChatGPT | Claude |
 |---|---|---|
-| Enable | Settings → Apps → Advanced → **Developer mode** | — |
+| Enable | Settings → Apps → Advanced → **Developer mode** (Plus/Pro/Team/Enterprise) | — |
 | Add | Settings → Connectors → Create | Settings → Connectors → Add custom connector |
 | URL | `https://<host>/mcp` | `https://<host>/mcp` |
 | Auth | OAuth → redirects to Auth0 → log in → Allow | OAuth → same flow |
+
+ChatGPT's connector is added at the `https://…/mcp` route via **Developer Mode** specifically — there's no standard `search`/`fetch` tool pair (see [Tools](#tools)), so this only works via Developer Mode's custom tool calling, not ChatGPT's default (non-Developer-Mode) connector mode.
+
+Reference: [Building MCP servers for ChatGPT](https://platform.openai.com/docs/mcp) · [Claude custom connectors](https://claude.com/docs/connectors/custom/remote-mcp)
 
 ## Maintaining
 
 - **New tool**: add a `[McpServerTool]` method under `Tools/` — auto-discovered, nothing to register.
 - **Upgrade SDK**: check `ChatApp.Mcp.csproj`'s comment before bumping past `2.0.0`.
 - **Revoke access**: rotate backend's `Clients:McpKey` (kills every connector), or revoke one client in Auth0 → Applications.
-- **Backend contract drift**: `DTOs/` is hand-maintained, not shared — update if backend DTOs change ([source of truth](../docs/backend-system-design-and-architecture.md#10-api-reference)).
+- **Backend contract drift**: `DTOs/` is hand-maintained, not shared — update if backend DTOs change ([source of truth](../backend/docs/backend-system-design-and-architecture.md#10-api-reference)).
 
 ## Troubleshooting
 
@@ -105,5 +126,7 @@ ngrok's free URL changes every restart — update the connector URL each time, o
 ## References
 
 - [MCP](https://modelcontextprotocol.io/) · [MCP C# SDK](https://github.com/modelcontextprotocol/csharp-sdk)
-- [ChatGPT Developer mode](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt) · [Claude custom connectors](https://claude.com/docs/connectors/custom/remote-mcp)
+- [Building MCP servers for ChatGPT](https://platform.openai.com/docs/mcp) · [ChatGPT Developer mode](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt) · [Claude custom connectors](https://claude.com/docs/connectors/custom/remote-mcp)
 - [Auth0 docs](https://auth0.com/docs) · [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728)
+
+**Related documents:** [backend/README.md](../backend/README.md) · [backend architecture](../backend/docs/backend-system-design-and-architecture.md) · [n8n/README.md](../n8n/README.md) — n8n shares the same service-key + on-behalf-of auth model as this server.

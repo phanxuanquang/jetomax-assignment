@@ -2,7 +2,7 @@
 
 Realtime chat PWA — sign in with Google, message 1:1 or in groups, send images (AI-captioned), request an AI summary of a conversation. React + Vite + TypeScript SPA that talks to the ASP.NET Core backend in `../backend/` over REST and SignalR.
 
-Product brief this was built from: [`../frontend-docs/`](../frontend-docs/). Architecture as actually built: [`docs/`](docs/).
+Product requirements this was built from: [`../docs/software-requirements-specification.md`](../docs/software-requirements-specification.md). Architecture as actually built: [`docs/`](docs/).
 
 ## Features
 
@@ -39,6 +39,10 @@ Explicitly not built (out of scope per the product brief): push notifications, e
 - The backend (`../backend/`) running and reachable — see [`../backend/README.md`](../backend/README.md)
 
 ## Setup
+
+**Shortcut:** `cp .env.example .env.local` (fill in real values, see table below), then `./start-dev.ps1` — it installs dependencies and starts the dev server for you.
+
+Or manually:
 
 ```bash
 cd frontend
@@ -92,7 +96,7 @@ frontend/
 
 Full breakdown of each folder, state management approach, and how auth/realtime/images actually work: [`docs/architecture.md`](docs/architecture.md). The reasoning behind non-obvious choices (state library, PWA strategy, image URL handling, etc.): [`docs/decisions.md`](docs/decisions.md).
 
-## LAN access (testing from another device)
+## LAN access
 
 `./start-dev.ps1` (see root) handles this automatically: it detects this machine's LAN IPv4, adds it to the backend's allowed CORS origins (via a user-secret, not by editing backend config files), and binds the backend to every network interface instead of just `localhost`. The frontend itself resolves its API/SignalR base URL from whatever hostname the page was loaded through (`src/lib/apiBaseUrl.ts`), so a LAN device automatically calls the right host — no need to edit `VITE_API_BASE_URL` for this.
 
@@ -100,7 +104,7 @@ Only one caveat left: **service workers only register on `https://` or `localhos
 
 If you're running the two dev servers some other way (not the script), you'll need to replicate this yourself: bind Kestrel to `0.0.0.0` (e.g. `dotnet run -- --urls http://0.0.0.0:5000`) and add your LAN origin to the backend's `CORS:AllowedOrigins`.
 
-## Deploying
+## Deployment
 
 `npm run build` produces a static `dist/` folder — deploy it to any static host (Vercel, Netlify, Nginx, etc.) that:
 - serves `index.html` for unknown paths (SPA fallback — this is a client-routed app), and

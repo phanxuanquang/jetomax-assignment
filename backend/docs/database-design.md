@@ -1,6 +1,6 @@
 # Database Design
 
-The data model, mapping 1:1 to [`schema.sql`](schema.sql). Technical usage is in [backend-system-design-and-architecture.md](backend-system-design-and-architecture.md); product requirements in [software-requirements-specification.md](software-requirements-specification.md).
+The data model, mapping 1:1 to [`schema.sql`](schema.sql). Technical usage is in [backend-system-design-and-architecture.md](backend-system-design-and-architecture.md); product requirements in the [SRS](../../docs/software-requirements-specification.md).
 
 > **Principle.** Postgres is the single source of truth; realtime only notifies. Conversations are **soft-deleted**, never dropped. Messages and users are never deleted at all.
 
@@ -236,4 +236,4 @@ can_join(conv)        -- owner_id IS NOT NULL AND is_deleted = false
 
 ## Verification
 
-`schema.sql` is idempotent — safe to run against the same database twice. See [prerequisite-setups.md](prerequisite-setups.md#3-apply-the-database-schema) to apply it.
+`schema.sql` is idempotent — safe to run against the same database twice. See [../README.md § Apply the database schema](../README.md#4-apply-the-database-schema) to apply it.

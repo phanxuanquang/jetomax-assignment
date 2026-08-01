@@ -80,7 +80,7 @@ flowchart TB
     N8N -->|REST + service key| API
 ```
 
-The client authenticates with Supabase and reuses the same JWT for both REST and the SignalR connection. Images go straight from the browser to Storage; the backend only ever sees the resulting URL. MCP and n8n are external clients of the same REST API, refer to [mcp-integration.md](mcp-integration.md) and [n8n-workflow.md](n8n-workflow.md) for further details.
+The client authenticates with Supabase and reuses the same JWT for both REST and the SignalR connection. Images go straight from the browser to Storage; the backend only ever sees the resulting URL. MCP and n8n are external clients of the same REST API, refer to [mcp/README.md](../../mcp/README.md) and [n8n/README.md](../../n8n/README.md) for further details.
 
 ---
 
@@ -366,7 +366,7 @@ A username that doesn't resolve to a real user in any of the bodies above return
 
 ### 10.3 External clients
 
-MCP and n8n are not part of this solution — they're separate deployables that call the REST API above like any other authenticated client. See [mcp-integration.md](mcp-integration.md) and [n8n-workflow.md](n8n-workflow.md).
+MCP and n8n are not part of this solution — they're separate deployables that call the REST API above like any other authenticated client. See [mcp/README.md](../../mcp/README.md) and [n8n/README.md](../../n8n/README.md).
 
 ---
 
@@ -398,4 +398,4 @@ MCP and n8n are not part of this solution — they're separate deployables that 
 - [Semantic Kernel](https://learn.microsoft.com/semantic-kernel/overview/) · [Gemini API models](https://ai.google.dev/gemini-api/docs/models)
 - [Supabase Auth](https://supabase.com/docs/guides/auth) · [Storage](https://supabase.com/docs/guides/storage) · [Row-Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security) · [Validating Supabase JWTs](https://supabase.com/docs/guides/auth/jwts)
 
-**Related documents:** [software-requirements-specification.md](software-requirements-specification.md) · [database-design.md](database-design.md) · [prerequisite-setups.md](prerequisite-setups.md) · [mcp-integration.md](mcp-integration.md) · [n8n-workflow.md](n8n-workflow.md)
+**Related documents:** [SRS](../../docs/software-requirements-specification.md) · [database-design.md](database-design.md) · [backend/README.md — prerequisites & setup](../README.md#prerequisites) · [mcp/README.md](../../mcp/README.md) · [n8n/README.md](../../n8n/README.md)

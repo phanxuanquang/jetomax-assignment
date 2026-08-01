@@ -26,7 +26,7 @@ src/
                     React here, features/realtime/HubProvider.tsx is the React half
     query/          TanStack Query client + the single source of truth for query keys
     format.ts       Small date/time formatting helpers
-  types/            Interfaces mirroring frontend-docs/03-data-model.md, 1:1 with the API
+  types/            Interfaces mirroring ../../backend/docs/database-design.md, 1:1 with the API
   hooks/            Cross-feature hooks with no feature of their own (useDebouncedValue)
 ```
 
@@ -77,4 +77,4 @@ Storing the path instead of a pre-signed URL is deliberate: a signed URL baked i
 
 ## PWA
 
-`vite-plugin-pwa` with `registerType: 'autoUpdate'` — an app-shell precache only (static assets, install prompt), no offline data/message queue. A realtime chat has a real correctness cost to queuing sends made while offline (duplicate/out-of-order risk); the acceptance bar in `frontend-docs/01-product-requirements.md` cares about a reconnect never losing or duplicating messages, which the realtime + query-invalidation design already covers for online reconnects. Offline compose was scoped out rather than half-built.
+`vite-plugin-pwa` with `registerType: 'autoUpdate'` — an app-shell precache only (static assets, install prompt), no offline data/message queue. A realtime chat has a real correctness cost to queuing sends made while offline (duplicate/out-of-order risk); the acceptance bar in [`../../docs/software-requirements-specification.md` §F-3](../../docs/software-requirements-specification.md#f-3--real-time-messaging) cares about a reconnect never losing or duplicating messages, which the realtime + query-invalidation design already covers for online reconnects. Offline compose was scoped out rather than half-built.
