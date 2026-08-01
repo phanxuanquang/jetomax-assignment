@@ -373,6 +373,12 @@ node_modules/
 n8n/.n8n/
 .n8n
 
+# Per-project local secrets (backend/, mcp/, n8n/ start-dev.ps1 read these; frontend/ is covered by
+# frontend/.gitignore's *.local). Never commit the real files, only their .example templates.
+backend/.env.local
+mcp/.env.local
+n8n/.env.local
+
 .agents/
 .claude/
 agent/
